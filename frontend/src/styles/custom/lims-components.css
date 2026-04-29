@@ -1,0 +1,9 @@
+/* LIMS-specific component styles.
+ *
+ * Currently empty — vendor's style.css covers every visual we need so far.
+ * Add here ONLY when:
+ *   - Vendor doesn't ship a class for the case, OR
+ *   - We need a LIMS-specific style with no vendor analogue.
+ * Each rule must include a one-line WHY: comment explaining why vendor
+ * was insufficient. See ADR-frontend-theme-integration.md.
+ */

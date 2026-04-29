@@ -1,0 +1,448 @@
+{
+  "info": {
+    "name": "LIMS — Unit",
+    "description": "Unit master-data REST API. JWT Bearer auth (ADR-009). Run \"Login as admin\" first to seed {{accessToken}}.\n\nROUTES (both shapes ship — pick by use case):\n\n  Flat (master-data /units page):\n    GET  /api/units                              → listAll (FK include: category)\n    POST /api/units                              → createAll (categoryID in BODY)\n\n  Nested (category-scoped pages — Category profile, future drilldowns):\n    GET  /api/categories/:categoryID/units       → list\n    POST /api/categories/:categoryID/units       → create (categoryID from URL)\n\n  Flat (single-record):\n    GET  /api/units/:unitID                      → getOne\n    PUT  /api/units/:unitID                      → update (categoryID NOT accepted)\n    DEL  /api/units/:unitID                      → softDelete\n\nPREREQUISITE: A valid Category must exist. Set {{categoryID}} in collection variables to a real category UUID before running (run Category collection first, then copy the categoryID).\n\nRun top-to-bottom: the first POST seeds {{unitID}} which subsequent requests reuse.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3033/api",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@lims.local",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin123",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "categoryID",
+      "value": "REPLACE_WITH_VALID_CATEGORY_UUID",
+      "type": "string"
+    },
+    {
+      "key": "unitID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List all units (flat, master-data)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/units?page=1&limit=20&sort=createdAt&order=desc",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "units" ],
+          "query": [
+            { "key": "page",       "value": "1" },
+            { "key": "limit",      "value": "20" },
+            { "key": "sort",       "value": "createdAt" },
+            { "key": "order",      "value": "desc" },
+            { "key": "search",     "value": "",                "disabled": true },
+            { "key": "categoryID", "value": "{{categoryID}}",  "disabled": true },
+            { "key": "isActive",   "value": "true",            "disabled": true }
+          ]
+        },
+        "description": "Global flat list across all categories. Each row includes nested category (id + name + type) so the master-data table can render names without extra round-trips."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data is array', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('meta has total/page/limit/totalPages', () => {",
+              "  pm.expect(body.meta).to.have.all.keys('total','page','limit','totalPages');",
+              "});",
+              "if (body.data.length > 0) {",
+              "  const row = body.data[0];",
+              "  pm.test('row includes category.name', () => pm.expect(row.category).to.have.property('name'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create unit (flat, master-data)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"categoryID\": \"{{categoryID}}\",\n  \"name\": \"Centistokes\",\n  \"symbol\": \"cSt\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/units",
+          "host": [ "{{baseUrl}}" ],
+          "path": [ "units" ]
+        },
+        "description": "Flat-route create for the master-data /units page. categoryID comes from the BODY (vs nested route which takes it from URL). Category FK validated — invalid ID returns 404."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data.unitID present', () => pm.expect(body.data.unitID).to.be.a('string'));",
+              "pm.test('categoryID matches', () => {",
+              "  pm.expect(body.data.categoryID).to.eql(pm.variables.get('categoryID'));",
+              "});",
+              "pm.collectionVariables.set('unitID', body.data.unitID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List units for category (nested)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/categories/{{categoryID}}/units?page=1&limit=20&sort=createdAt&order=desc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories",
+            "{{categoryID}}",
+            "units"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            },
+            {
+              "key": "sort",
+              "value": "createdAt"
+            },
+            {
+              "key": "order",
+              "value": "desc"
+            },
+            {
+              "key": "search",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "isActive",
+              "value": "true",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data is array', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('meta has total/page/limit/totalPages', () => {",
+              "  pm.expect(body.meta).to.have.all.keys('total','page','limit','totalPages');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create unit",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Density at 15°C\",\n  \"symbol\": \"kg/m³\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/categories/{{categoryID}}/units",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories",
+            "{{categoryID}}",
+            "units"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data.unitID present', () => pm.expect(body.data.unitID).to.be.a('string'));",
+              "pm.test('categoryID matches', () => {",
+              "  pm.expect(body.data.categoryID).to.eql(pm.variables.get('categoryID'));",
+              "});",
+              "pm.test('audit fields populated', () => {",
+              "  pm.expect(body.data.createdBy).to.be.a('string');",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});",
+              "pm.collectionVariables.set('unitID', body.data.unitID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create duplicate name in same category (case-insensitive — expect 409)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"density at 15°c\",\n  \"symbol\": \"g/cm³\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/categories/{{categoryID}}/units",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories",
+            "{{categoryID}}",
+            "units"
+          ]
+        },
+        "description": "Verifies the (categoryID, LOWER(name)) unique partial index. 'density at 15°c' must collide with the previously-created 'Density at 15°C' within the same category."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message indicates unique violation', () => pm.expect(body.message).to.match(/unique|duplicate/i));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get unit by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/units/{{unitID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "units",
+            "{{unitID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('matches requested ID', () => {",
+              "  pm.expect(body.data.unitID).to.eql(pm.variables.get('unitID'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update unit (PUT — full replace)",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Density at 15°C\",\n  \"symbol\": \"kg/m³\",\n  \"isActive\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/units/{{unitID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "units",
+            "{{unitID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('isActive flipped to false', () => pm.expect(body.data.isActive).to.be.false);",
+              "pm.test('updatedBy populated', () => {",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Soft delete unit",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/units/{{unitID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "units",
+            "{{unitID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+              "pm.test('empty body', () => pm.expect(pm.response.text()).to.have.lengthOf(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get deleted unit (expect 404)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/units/{{unitID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "units",
+            "{{unitID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message references Unit', () => pm.expect(body.message).to.match(/Unit/i));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

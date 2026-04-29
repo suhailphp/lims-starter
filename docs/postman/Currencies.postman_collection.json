@@ -1,0 +1,472 @@
+{
+  "info": {
+    "name": "LIMS — Currencies",
+    "description": "Multi-currency foundation. Currencies (master data) + ExchangeRates (historical) + atomic Set Base flow.\n\nRoutes (all under /api/currencies, JWT required, writes ADMIN-only):\n  GET    /                                   list (currentRate attached)\n  GET    /:currencyID                        detail\n  GET    /:currencyID/exchange-rates         rate history\n  GET    /:currencyID/rate-on-date/:date     historical lookup\n  POST   /                                   create (first ever auto-becomes base)\n  PUT    /:currencyID                        update (cannot deactivate base)\n  DELETE /:currencyID                        soft delete (cannot delete base)\n  POST   /:currencyID/exchange-rates         add rate (closes prior open-ended row)\n  PUT    /:currencyID/set-as-base            atomic flip + setting sync\n\nFlow: Run 'Login as admin' first to seed {{accessToken}}. Steps 1 & 5 capture {{aedID}} / {{usdID}} for downstream requests. The Cleanup step at the end restores AED as base so the test suite is rerunnable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",       "value": "http://localhost:3033/api", "type": "string" },
+    { "key": "adminEmail",    "value": "admin@lims.local",          "type": "string" },
+    { "key": "adminPassword", "value": "Admin123",                  "type": "string" },
+    { "key": "accessToken",   "value": "",                          "type": "string" },
+    { "key": "aedID",         "value": "",                          "type": "string" },
+    { "key": "usdID",         "value": "",                          "type": "string" }
+  ],
+  "auth": { "type": "noauth" },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('accessToken returned', () => pm.expect(body.data.accessToken).to.be.a('string'));",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. List currencies — AED is base, currentRate=1.000000",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/currencies?isBase=true",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies"],
+          "query": [{ "key": "isBase", "value": "true" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('has data array', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('exactly one base currency', () => pm.expect(body.data.length).to.eql(1));",
+              "const aed = body.data[0];",
+              "pm.test('base is AED', () => pm.expect(aed.code).to.eql('AED'));",
+              "pm.test('isBase=true', () => pm.expect(aed.isBase).to.be.true);",
+              "pm.test('currentRate.rate is 1.000000', () => pm.expect(aed.currentRate.rate).to.eql('1.000000'));",
+              "pm.collectionVariables.set('aedID', aed.currencyID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. DELETE base currency → 409",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{aedID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{aedID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "pm.test('error mentions base currency', () => {",
+              "  pm.expect(pm.response.json().message.toLowerCase()).to.include('base currency');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Deactivate base currency → 409",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"UAE Dirham\",\n  \"symbol\": \"د.إ\",\n  \"decimalPlaces\": 2,\n  \"displayOrder\": 0,\n  \"isActive\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{aedID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{aedID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "pm.test('error mentions deactivated', () => {",
+              "  pm.expect(pm.response.json().message.toLowerCase()).to.include('deactivated');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Create USD without initialRate → 422",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"USD\",\n  \"name\": \"US Dollar\",\n  \"symbol\": \"$\",\n  \"decimalPlaces\": 2,\n  \"displayOrder\": 10\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/currencies",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('error mentions initialRate', () => {",
+              "  pm.expect(JSON.stringify(body).toLowerCase()).to.include('initialrate');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Create USD with initialRate=0.27 → 201, captures {{usdID}}",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"USD\",\n  \"name\": \"US Dollar\",\n  \"symbol\": \"$\",\n  \"decimalPlaces\": 2,\n  \"displayOrder\": 10,\n  \"initialRate\": 0.27,\n  \"initialRateEffectiveDate\": \"2026-04-29\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/currencies",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('USD not base', () => pm.expect(body.data.isBase).to.be.false);",
+              "pm.test('currentRate=0.270000', () => pm.expect(body.data.currentRate.rate).to.eql('0.270000'));",
+              "pm.test('effectiveDate is 2026-04-29', () => pm.expect(body.data.currentRate.effectiveDate).to.eql('2026-04-29'));",
+              "pm.collectionVariables.set('usdID', body.data.currencyID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. GET USD detail → currentRate persists on standalone GET",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{usdID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{usdID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('returns USD', () => pm.expect(body.data.code).to.eql('USD'));",
+              "pm.test('currentRate is attached', () => pm.expect(body.data.currentRate).to.not.be.undefined);",
+              "pm.test('currentRate.rate=0.270000', () => pm.expect(body.data.currentRate.rate).to.eql('0.270000'));",
+              "pm.test('currentRate.source=manual', () => pm.expect(body.data.currentRate.source).to.eql('manual'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Add USD rate effective 2026-05-15 → old row gets expiryDate",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rate\": 0.28,\n  \"effectiveDate\": \"2026-05-15\",\n  \"notes\": \"Smoke test rate change\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{usdID}}/exchange-rates",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{usdID}}", "exchange-rates"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('new rate=0.280000', () => pm.expect(body.data.rate).to.eql('0.280000'));",
+              "pm.test('new rate is open-ended', () => pm.expect(body.data.expiryDate).to.eql(null));",
+              "pm.test('effectiveDate is 2026-05-15', () => pm.expect(body.data.effectiveDate).to.eql('2026-05-15'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. GET USD exchange-rates history → 2 rows, newest first, prior closed",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{usdID}}/exchange-rates",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{usdID}}", "exchange-rates"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('returns 2 rate rows', () => pm.expect(body.data.length).to.eql(2));",
+              "pm.test('newest first (0.28 open-ended)', () => {",
+              "  pm.expect(body.data[0].rate).to.eql('0.280000');",
+              "  pm.expect(body.data[0].expiryDate).to.eql(null);",
+              "});",
+              "pm.test('prior row (0.27) closed at 2026-05-15', () => {",
+              "  pm.expect(body.data[1].rate).to.eql('0.270000');",
+              "  pm.expect(body.data[1].expiryDate).to.eql('2026-05-15');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Rate on 2026-05-01 → returns 0.27 row",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{usdID}}/rate-on-date/2026-05-01",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{usdID}}", "rate-on-date", "2026-05-01"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('rate=0.270000 (older row)', () => pm.expect(body.data.rate).to.eql('0.270000'));",
+              "pm.test('expiryDate=2026-05-15', () => pm.expect(body.data.expiryDate).to.eql('2026-05-15'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Rate on 2026-05-20 → returns 0.28 row",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{usdID}}/rate-on-date/2026-05-20",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{usdID}}", "rate-on-date", "2026-05-20"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('rate=0.280000 (newer row)', () => pm.expect(body.data.rate).to.eql('0.280000'));",
+              "pm.test('expiryDate is null', () => pm.expect(body.data.expiryDate).to.eql(null));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Set USD as base → AED loses isBase + setting flips",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{usdID}}/set-as-base",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{usdID}}", "set-as-base"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('USD is now base', () => pm.expect(body.data.isBase).to.be.true);",
+              "pm.test('currentRate.source is base', () => pm.expect(body.data.currentRate.source).to.eql('base'));",
+              "pm.test('currentRate.rate is 1.000000 (implicit)', () => pm.expect(body.data.currentRate.rate).to.eql('1.000000'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Add rate to USD (now base) → 409",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rate\": 0.30,\n  \"effectiveDate\": \"2026-06-01\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{usdID}}/exchange-rates",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{usdID}}", "exchange-rates"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "pm.test('error mentions base currency', () => {",
+              "  pm.expect(pm.response.json().message.toLowerCase()).to.include('base currency');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. /api/settings/public → base_currency_code is now USD",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/settings/public",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "public"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const baseRow = body.data.find(r => r.settingKey === 'base_currency_code');",
+              "pm.test('base_currency_code row exists', () => pm.expect(baseRow).to.not.be.undefined);",
+              "pm.test('base_currency_code value=USD', () => pm.expect(baseRow.value).to.eql('USD'));",
+              "pm.test('isEditable=false', () => pm.expect(baseRow.isEditable).to.be.false);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Cleanup — restore AED as base",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/currencies/{{aedID}}/set-as-base",
+          "host": ["{{baseUrl}}"],
+          "path": ["currencies", "{{aedID}}", "set-as-base"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('AED is base again', () => {",
+              "  pm.expect(pm.response.json().data.code).to.eql('AED');",
+              "  pm.expect(pm.response.json().data.isBase).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

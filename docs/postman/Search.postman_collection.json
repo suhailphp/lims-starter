@@ -1,0 +1,346 @@
+{
+  "info": {
+    "name": "LIMS — Search",
+    "description": "Global search across 8 entities (Customers, Users, Tests, Methods, Equipment, Categories, Sources, Currencies). Single endpoint, ADMIN/MANAGER full results, others get an empty payload.\n\nRoute (JWT required):\n  GET /api/search?q=<term>&category=<all|customers|users|tests|methods|equipment|categories|sources|currencies>\n\nValidation:\n  q        required, 2-200 chars (trimmed)\n  category default 'all'; enum-validated\n\nResponse:\n  category=all       → { resultsByCategory: { <cat>: { count, results: [...] } } }\n  category=<single>  → { results: [...] } (capped at 50)\n\nFlow: Run 'Login as admin' first to seed {{accessToken}}. Smokes cover validation, auth, ALL mode, single-category mode, no-match path, and (manual) MANAGER role check.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",       "value": "http://localhost:3033/api", "type": "string" },
+    { "key": "adminEmail",    "value": "admin@lims.local",          "type": "string" },
+    { "key": "adminPassword", "value": "Admin123",                  "type": "string" },
+    { "key": "accessToken",   "value": "",                          "type": "string" }
+  ],
+  "auth": { "type": "noauth" },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('accessToken returned', () => pm.expect(body.data.accessToken).to.be.a('string'));",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Missing q → 422",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Unprocessable', () => pm.response.to.have.status(422));",
+              "pm.test('error names q field', () => {",
+              "  const errs = pm.response.json().errors || [];",
+              "  pm.expect(errs.some(e => e.field === 'q')).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. q too short (1 char) → 422",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?q=a",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [{ "key": "q", "value": "a" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Unprocessable', () => pm.response.to.have.status(422));",
+              "pm.test('error mentions 2 characters', () => {",
+              "  const errs = pm.response.json().errors || [];",
+              "  pm.expect(errs.some(e => /2 characters/i.test(e.message))).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Invalid category → 422",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?q=admin&category=bogus",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [
+            { "key": "q",        "value": "admin" },
+            { "key": "category", "value": "bogus" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Unprocessable', () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. No token → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?q=admin",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [{ "key": "q", "value": "admin" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+              "pm.request.headers.remove('Authorization');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. ALL — q='admin' returns Users bucket with seeded admin",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?q=admin",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [{ "key": "q", "value": "admin" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('category=all in payload', () => pm.expect(body.data.category).to.eql('all'));",
+              "pm.test('resultsByCategory has users bucket', () => {",
+              "  pm.expect(body.data.resultsByCategory).to.have.property('users');",
+              "});",
+              "pm.test('admin user is present', () => {",
+              "  const users = body.data.resultsByCategory.users.results;",
+              "  pm.expect(users.some(u => u.subtitle && u.subtitle.includes('admin@lims.local'))).to.be.true;",
+              "});",
+              "pm.test('result has link with view= param', () => {",
+              "  const users = body.data.resultsByCategory.users.results;",
+              "  pm.expect(users[0].link).to.match(/^\\/users\\?view=/);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. ALL — q='ae' finds AED currency bucket",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?q=ae",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [{ "key": "q", "value": "ae" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('currencies bucket present', () => {",
+              "  pm.expect(body.data.resultsByCategory).to.have.property('currencies');",
+              "});",
+              "pm.test('AED is in results', () => {",
+              "  const cur = body.data.resultsByCategory.currencies.results;",
+              "  pm.expect(cur.some(c => c.name.startsWith('AED'))).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. SINGLE — category=users, flat results array",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?q=admin&category=users",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [
+            { "key": "q",        "value": "admin" },
+            { "key": "category", "value": "users" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('results is an array', () => pm.expect(body.data.results).to.be.an('array'));",
+              "pm.test('no resultsByCategory in single mode', () => {",
+              "  pm.expect(body.data).to.not.have.property('resultsByCategory');",
+              "});",
+              "pm.test('all results are type=users', () => {",
+              "  pm.expect(body.data.results.every(r => r.type === 'users')).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. SINGLE — category=currencies",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?q=ae&category=currencies",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [
+            { "key": "q",        "value": "ae" },
+            { "key": "category", "value": "currencies" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('all results are type=currencies', () => {",
+              "  pm.expect(body.data.results.every(r => r.type === 'currencies')).to.be.true;",
+              "});",
+              "pm.test('result has currencies link prefix', () => {",
+              "  pm.expect(body.data.results[0].link).to.match(/^\\/currencies\\?view=/);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. ALL — q with no matches returns empty resultsByCategory",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/search?q=zzzzznotamatch",
+          "host": ["{{baseUrl}}"],
+          "path": ["search"],
+          "query": [{ "key": "q", "value": "zzzzznotamatch" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('totalResults is 0', () => pm.expect(body.data.totalResults).to.eql(0));",
+              "pm.test('resultsByCategory is an empty object', () => {",
+              "  pm.expect(Object.keys(body.data.resultsByCategory)).to.have.length(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

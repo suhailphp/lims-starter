@@ -1,0 +1,147 @@
+{
+  "info": {
+    "name": "LIMS — UserActivity",
+    "description": "User-facing activity feed (Profile page).\n\nRoutes:\n  GET /api/users/me/activities                  (any authenticated)\n  GET /api/users/:userID/activities              (ADMIN/MANAGER or self)\n\nFlow: Run 'Login as admin' first to seed {{accessToken}}.\n\nLogged events: LOGIN, LOGIN_FAILED, LOGOUT, PROFILE_UPDATED, PHOTO_UPDATED, PASSWORD_CHANGED, PASSWORD_RESET. Sort always createdAt DESC.\n\nSee docs/modules/00-activity-logging.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",       "value": "http://localhost:3033/api", "type": "string" },
+    { "key": "adminEmail",    "value": "admin@lims.local",          "type": "string" },
+    { "key": "adminPassword", "value": "Admin123",                  "type": "string" },
+    { "key": "accessToken",   "value": "",                          "type": "string" },
+    { "key": "userID",        "value": "",                          "type": "string" }
+  ],
+  "auth": { "type": "noauth" },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}" },
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res?.data?.accessToken) pm.collectionVariables.set('accessToken', res.data.accessToken);",
+              "if (res?.data?.user?.userID) pm.collectionVariables.set('userID', res.data.user.userID);",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "GET /users/me/activities (self feed)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/users/me/activities?limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "me", "activities"],
+          "query": [{ "key": "limit", "value": "20" }]
+        }
+      }
+    },
+    {
+      "name": "GET /users/me/activities (filter by actionType=LOGIN)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/users/me/activities?actionType=LOGIN&limit=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "me", "activities"],
+          "query": [
+            { "key": "actionType", "value": "LOGIN" },
+            { "key": "limit", "value": "10" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /users/:userID/activities (any user — admin/manager/self)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/users/{{userID}}/activities?limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "{{userID}}", "activities"],
+          "query": [{ "key": "limit", "value": "20" }]
+        }
+      }
+    },
+    {
+      "name": "GET /users/me/timeline (unified — activities + own audit logs)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/users/me/timeline?limit=20&filter=all",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "me", "timeline"],
+          "query": [
+            { "key": "limit",  "value": "20" },
+            { "key": "filter", "value": "all", "description": "all | activities | changes" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /users/me/timeline?filter=activities (UserActivities only)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/users/me/timeline?filter=activities&limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "me", "timeline"],
+          "query": [
+            { "key": "filter", "value": "activities" },
+            { "key": "limit",  "value": "20" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /users/me/timeline?filter=changes (own AuditLogs only)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/users/me/timeline?filter=changes&limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["users", "me", "timeline"],
+          "query": [
+            { "key": "filter", "value": "changes" },
+            { "key": "limit",  "value": "20" }
+          ]
+        }
+      }
+    }
+  ]
+}

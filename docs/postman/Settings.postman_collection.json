@@ -1,0 +1,223 @@
+{
+  "info": {
+    "name": "Settings",
+    "description": "Lab-agnostic key/value settings module.\n\nRoutes (all under /api/settings):\n  GET    /public                 (unauth — login page reads this)\n  GET    /                       (ADMIN)\n  GET    /category/:category     (ADMIN)\n  GET    /:settingKey            (ADMIN)\n  PUT    /:settingKey            (ADMIN)\n  PUT    /bulk                   (ADMIN)\n  POST   /lab-logo               (ADMIN, multipart)\n\nRun the Auth → Login request first to seed `{{accessToken}}`.\n\n`isEditable=false` rows (sample_serial_format, report_number_format) reject PUT with 403.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",     "value": "http://localhost:3033/api", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" }
+  ],
+  "auth": { "type": "noauth" },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const path = pm.request.url.getPath();",
+          "const isPublic = /\\/settings\\/public$/.test(path);",
+          "if (!isPublic) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}",
+          "if (!pm.request.body || pm.request.body.mode !== 'formdata') {",
+          "  pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Public (unauth)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/settings/public",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "public"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('only public rows', () => {",
+              "  pm.expect(body.data.every(r => r.isPublic === true)).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List All (ADMIN)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/settings", "host": ["{{baseUrl}}"], "path": ["settings"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const cats = new Set(pm.response.json().data.map(r => r.category));",
+              "pm.test('contains all 4 categories', () => {",
+              "  ['tenant','localization','system','workflow'].forEach(c => pm.expect(cats.has(c)).to.be.true);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get By Category — tenant",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/settings/category/tenant",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "category", "tenant"]
+        }
+      }
+    },
+    {
+      "name": "Update Single — lab_name",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"value\": \"Acme Lab\" }"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/settings/lab_name",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "lab_name"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('value updated', () => pm.expect(pm.response.json().data.value).to.eql('Acme Lab'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Restore lab_name",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": { "mode": "raw", "raw": "{ \"value\": \"Demo Company\" }" },
+        "url": {
+          "raw": "{{baseUrl}}/settings/lab_name",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "lab_name"]
+        }
+      }
+    },
+    {
+      "name": "Bulk Update — localization",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"currency_code\": \"USD\", \"currency_symbol\": \"$\" }"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/settings/bulk",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "bulk"]
+        }
+      }
+    },
+    {
+      "name": "Bulk Restore — localization",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"currency_code\": \"AED\", \"currency_symbol\": \"د.إ\" }"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/settings/bulk",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "bulk"]
+        }
+      }
+    },
+    {
+      "name": "Reject System-Locked Write",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": { "mode": "raw", "raw": "{ \"value\": \"NEW\" }" },
+        "url": {
+          "raw": "{{baseUrl}}/settings/sample_serial_format",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "sample_serial_format"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Upload Lab Logo",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "description": "multipart/form-data — single field `file` (jpg/png/webp).",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "file", "type": "file", "src": "" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/settings/lab-logo",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "lab-logo"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.test('attachment returned', () => pm.expect(pm.response.json().data.attachmentID).to.be.a('string'));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,432 @@
+{
+  "info": {
+    "name": "LIMS — OcmElement",
+    "description": "OcmElement master-data REST API. JWT Bearer auth (ADR-009). Run \"Login as admin\" first to seed {{accessToken}}.\n\nFlat routes:\n  GET    /api/ocm-elements\n  POST   /api/ocm-elements\n  GET    /api/ocm-elements/:ocmElementID\n  PUT    /api/ocm-elements/:ocmElementID\n  DELETE /api/ocm-elements/:ocmElementID\n\nRun top-to-bottom: POST seeds {{ocmElementID}} which subsequent requests reuse.\n\nValidation:\n  - symbol unique (case-insensitive) among non-deleted records\n  - Range logic: normalMin <= normalMax, cautionMin <= cautionMax, criticalMin <= criticalMax\n  - Progression: normalMax <= cautionMin, cautionMax <= criticalMin\n  - All range fields optional; cross-field checks only fire when both sides present",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3033/api",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@lims.local",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin123",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ocmElementID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List ocm-elements",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/ocm-elements?page=1&limit=20&sort=name&order=asc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ocm-elements"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            },
+            {
+              "key": "sort",
+              "value": "name"
+            },
+            {
+              "key": "order",
+              "value": "asc"
+            },
+            {
+              "key": "search",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "isActive",
+              "value": "true",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data is array', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('meta has total/page/limit/totalPages', () => {",
+              "  pm.expect(body.meta).to.have.all.keys('total','page','limit','totalPages');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create ocm-element (Iron/Fe with full range bands)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Iron\",\n  \"symbol\": \"Fe\",\n  \"unit\": \"ppm\",\n  \"normalRangeMin\": 0,\n  \"normalRangeMax\": 50,\n  \"cautionRangeMin\": 50,\n  \"cautionRangeMax\": 100,\n  \"criticalRangeMin\": 100,\n  \"criticalRangeMax\": 999,\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ocm-elements",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ocm-elements"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data.ocmElementID present', () => pm.expect(body.data.ocmElementID).to.be.a('string'));",
+              "pm.test('symbol matches', () => pm.expect(body.data.symbol).to.eql('Fe'));",
+              "pm.test('audit fields populated', () => {",
+              "  pm.expect(body.data.createdBy).to.be.a('string');",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});",
+              "pm.collectionVariables.set('ocmElementID', body.data.ocmElementID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create duplicate symbol (expect 409)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Iron Duplicate\",\n  \"symbol\": \"fe\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ocm-elements",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ocm-elements"
+          ]
+        },
+        "description": "Symbol 'fe' collides with 'Fe' (case-insensitive unique index)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create with invalid range (min > max) — expect 422",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Copper\",\n  \"symbol\": \"Cu\",\n  \"normalRangeMin\": 100,\n  \"normalRangeMax\": 50,\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ocm-elements",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ocm-elements"
+          ]
+        },
+        "description": "normalRangeMin (100) > normalRangeMax (50) — Zod superRefine should reject."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Unprocessable', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('errors reference normalRangeMax', () => {",
+              "  const fields = body.errors.map(e => e.field);",
+              "  pm.expect(fields).to.include('normalRangeMax');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create with bad progression (cautionMin < normalMax) — expect 422",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Copper\",\n  \"symbol\": \"Cu\",\n  \"normalRangeMax\": 80,\n  \"cautionRangeMin\": 50,\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ocm-elements",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ocm-elements"
+          ]
+        },
+        "description": "cautionRangeMin (50) < normalRangeMax (80) — progression violation."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Unprocessable', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('errors reference cautionRangeMin', () => {",
+              "  const fields = body.errors.map(e => e.field);",
+              "  pm.expect(fields).to.include('cautionRangeMin');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get ocm-element by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/ocm-elements/{{ocmElementID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ocm-elements",
+            "{{ocmElementID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('matches requested ID', () => {",
+              "  pm.expect(body.data.ocmElementID).to.eql(pm.variables.get('ocmElementID'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update ocm-element (PUT)",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Iron\",\n  \"symbol\": \"Fe\",\n  \"unit\": \"ppm\",\n  \"normalRangeMin\": 0,\n  \"normalRangeMax\": 60,\n  \"cautionRangeMin\": 60,\n  \"cautionRangeMax\": 120,\n  \"criticalRangeMin\": 120,\n  \"criticalRangeMax\": 999,\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ocm-elements/{{ocmElementID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ocm-elements",
+            "{{ocmElementID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('normalRangeMax updated', () => pm.expect(parseFloat(body.data.normalRangeMax)).to.eql(60));",
+              "pm.test('updatedBy populated', () => {",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Soft delete ocm-element",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/ocm-elements/{{ocmElementID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ocm-elements",
+            "{{ocmElementID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+              "pm.test('empty body', () => pm.expect(pm.response.text()).to.have.lengthOf(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get deleted ocm-element (expect 404)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/ocm-elements/{{ocmElementID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ocm-elements",
+            "{{ocmElementID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message references OcmElement', () => pm.expect(body.message).to.match(/OcmElement/i));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

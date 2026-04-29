@@ -1,0 +1,401 @@
+{
+  "info": {
+    "name": "LIMS — Category",
+    "description": "Category master-data REST API. JWT Bearer auth (ADR-009). Run \"Login as admin\" first to seed {{accessToken}}. Run top-to-bottom: POST seeds {{categoryID}} which subsequent requests reuse. Conflict-on-delete request requires a manually-inserted child row — see its description.\n\nNested children (live now):\n  GET/POST /api/categories/:categoryID/units  ← Unit collection\nNested children (when those APIs ship):\n  GET/POST /api/categories/:categoryID/tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3033/api",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@lims.local",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin123",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "categoryID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List categories",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/categories?page=1&limit=20&sort=createdAt&order=desc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            },
+            {
+              "key": "sort",
+              "value": "createdAt"
+            },
+            {
+              "key": "order",
+              "value": "desc"
+            },
+            {
+              "key": "search",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "type",
+              "value": "FUEL",
+              "disabled": true
+            },
+            {
+              "key": "isActive",
+              "value": "true",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data is array', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('meta has total/page/limit/totalPages', () => {",
+              "  pm.expect(body.meta).to.have.all.keys('total','page','limit','totalPages');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create category",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Diesel\",\n  \"type\": \"FUEL\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/categories",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data.categoryID present', () => pm.expect(body.data.categoryID).to.be.a('string'));",
+              "pm.test('type echoed', () => pm.expect(body.data.type).to.eql('FUEL'));",
+              "pm.test('audit fields populated', () => {",
+              "  pm.expect(body.data.createdBy).to.be.a('string');",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});",
+              "pm.collectionVariables.set('categoryID', body.data.categoryID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create duplicate name (case-insensitive — expect 409)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"diesel\",\n  \"type\": \"FUEL\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/categories",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories"
+          ]
+        },
+        "description": "Verifies the LOWER(name) unique partial index. 'diesel' must collide with the previously-created 'Diesel'."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message indicates unique violation', () => pm.expect(body.message).to.match(/unique|duplicate/i));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get category by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/categories/{{categoryID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories",
+            "{{categoryID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('matches requested ID', () => {",
+              "  pm.expect(body.data.categoryID).to.eql(pm.variables.get('categoryID'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update category (PUT — full replace)",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Diesel\",\n  \"type\": \"FUEL\",\n  \"isActive\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/categories/{{categoryID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories",
+            "{{categoryID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('isActive flipped to false', () => pm.expect(body.data.isActive).to.be.false);",
+              "pm.test('updatedBy populated', () => {",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Soft delete with active children (expect 409 — prereq required)",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/categories/{{categoryID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories",
+            "{{categoryID}}"
+          ]
+        },
+        "description": "Parent Deletion Policy: DELETE must return 409 when any non-deleted Unit, Test, or Source references this category.\n\nPREREQUISITE — insert a child row pointing at {{categoryID}} before running:\n\n  INSERT INTO \"Units\" (\"unitID\", \"categoryID\", \"name\", \"symbol\", \"isDeleted\", \"isActive\", \"createdAt\", \"updatedAt\")\n  VALUES (gen_random_uuid(), '{{categoryID}}', 'TEST-PREREQ', 'tp', false, true, NOW(), NOW());\n\nWithout a child row this endpoint returns 204 and the assertions below fail — which correctly indicates the test setup was incomplete."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict (requires active child row — see request description)', () => pm.response.to.have.status(409));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message references active references', () => pm.expect(body.message).to.match(/active references/i));",
+              "pm.test('errors array enumerates blockers', () => {",
+              "  pm.expect(body.errors).to.be.an('array').and.not.empty;",
+              "  body.errors.forEach((e) => {",
+              "    pm.expect(e).to.have.all.keys('field', 'message');",
+              "    pm.expect(['units', 'tests', 'sources']).to.include(e.field);",
+              "  });",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Soft delete category",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/categories/{{categoryID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories",
+            "{{categoryID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+              "pm.test('empty body', () => pm.expect(pm.response.text()).to.have.lengthOf(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get deleted category (expect 404)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/categories/{{categoryID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "categories",
+            "{{categoryID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message references Category', () => pm.expect(body.message).to.match(/Category/i));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

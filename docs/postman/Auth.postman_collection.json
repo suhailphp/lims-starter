@@ -1,0 +1,268 @@
+{
+  "info": {
+    "name": "LIMS — Auth",
+    "description": "Authentication endpoints (Module 02 — Phase 4).\n\nRoutes:\n  POST   /api/auth/login            (public)\n  POST   /api/auth/refresh          (public)\n  POST   /api/auth/logout           (Bearer)\n  GET    /api/auth/me               (Bearer)\n  POST   /api/auth/change-password  (Bearer)\n\nRun top-to-bottom: Login seeds {{accessToken}} + {{refreshToken}}.\nRefresh rotates them; Logout clears them.\n\nPasswords: min 8 chars, max 128, ≥1 letter + ≥1 digit.\nLockout: 5 failed logins → 15 min lock with unlock-timestamp in 401 message.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",      "value": "http://localhost:3033/api", "type": "string" },
+    { "key": "email",        "value": "admin@lims.local", "type": "string" },
+    { "key": "password",     "value": "Admin123", "type": "string" },
+    { "key": "accessToken",  "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" }
+  ],
+  "auth": { "type": "noauth" },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "// Attach Bearer token to authenticated routes (anything except login + refresh)",
+          "const path = pm.request.url.getPath();",
+          "const isPublic = /\\/auth\\/(login|refresh)$/.test(path);",
+          "if (!isPublic) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('accessToken returned', () => pm.expect(body.data.accessToken).to.be.a('string'));",
+              "pm.test('refreshToken returned', () => pm.expect(body.data.refreshToken).to.be.a('string'));",
+              "pm.test('user payload present', () => pm.expect(body.data.user.email).to.eql(pm.variables.get('email')));",
+              "pm.test('user payload omits password', () => pm.expect(body.data.user).to.not.have.property('password'));",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);",
+              "pm.collectionVariables.set('refreshToken', body.data.refreshToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login (bad password — expect 401)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"WrongPassword99\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "description": "Increments failedLoginAttempts. Run no more than 4 times — 5 triggers a 15-minute lockout."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message is generic (no email leak)', () => pm.expect(body.message).to.match(/invalid credentials/i));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get current user (/me)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/me",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "me"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('user matches collection email', () => pm.expect(body.data.email).to.eql(pm.variables.get('email')));",
+              "pm.test('password not exposed', () => pm.expect(body.data).to.not.have.property('password'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refresh tokens",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/refresh",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "refresh"]
+        },
+        "description": "Rotates the pair. Old refresh token is revoked; subsequent reuse triggers chain revocation."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('new accessToken issued', () => pm.expect(body.data.accessToken).to.be.a('string'));",
+              "pm.test('new refreshToken issued (rotated)', () => {",
+              "  const old = pm.collectionVariables.get('refreshToken');",
+              "  pm.expect(body.data.refreshToken).to.be.a('string');",
+              "  pm.expect(body.data.refreshToken).to.not.eql(old);",
+              "});",
+              "pm.test('no user payload (Q4)', () => pm.expect(body.data).to.not.have.property('user'));",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);",
+              "pm.collectionVariables.set('refreshToken', body.data.refreshToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refresh reuse (expect 401)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"reuse-this-after-logout-or-refresh\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/refresh",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "refresh"]
+        },
+        "description": "Manually paste an already-revoked refresh token here to verify the reuse alarm."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Change password",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/change-password",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "change-password"]
+        },
+        "description": "Demo passes the same password as both — server may or may not reject identical passwords (no rule for that today). Real usage: change to something new. Note: a successful change revokes ALL refresh tokens for the user."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('message mentions revocation', () => pm.expect(body.message).to.match(/revoked/i));",
+              "// Stale tokens — clear them so subsequent requests don't try a dead session",
+              "pm.collectionVariables.set('accessToken', '');",
+              "pm.collectionVariables.set('refreshToken', '');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/logout",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "logout"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+              "pm.test('empty body', () => pm.expect(pm.response.text()).to.have.lengthOf(0));",
+              "pm.collectionVariables.set('accessToken', '');",
+              "pm.collectionVariables.set('refreshToken', '');"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

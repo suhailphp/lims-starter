@@ -1,0 +1,47 @@
+/* Indeterminate progress bar slide — used by CustomerTable's top loading bar
+ * during refetch (sort/page/search after initial load).
+ * Slides a 33%-wide bar across the table card width. */
+@keyframes progress {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+/* `.brand-panel` — opt-out scope for permanent white-on-dark surfaces.
+ *
+ * Vendor's [data-theme="dark"] flips `--color-white` from #FFFFFF to #090212.
+ * Tailwind v4 emits `color-mix(in oklab, var(--color-white) 70%, transparent)`
+ * for opacity-modified utilities like `text-white/70`, so these go DARK with
+ * low alpha in dark mode — invisible on the purple login gradient.
+ *
+ * Vendor's spot-fix at style.css:1438 only covers plain `.text-white`. This
+ * scope adds the missing variants. Apply `.brand-panel` to any element whose
+ * background is intentionally fixed (always-purple/dark) regardless of theme. */
+.brand-panel .text-white\/50 { color: rgba(255, 255, 255, 0.50); }
+.brand-panel .text-white\/70 { color: rgba(255, 255, 255, 0.70); }
+.brand-panel .text-white\/80 { color: rgba(255, 255, 255, 0.80); }
+.brand-panel .bg-white\/10   { background-color: rgba(255, 255, 255, 0.10); }
+.brand-panel .bg-white\/20   { background-color: rgba(255, 255, 255, 0.20); }
+
+/* Browser autofill neutralization.
+ *
+ * Chrome / Safari force `:-webkit-autofill` inputs to a hardcoded whitish
+ * background (~#e8f0fe) and yellow tint. This wins over our `bg-white`, so
+ * an autofilled email/password input shows up bright in dark mode while
+ * the floating label sitting on top stays dark — the "stripe" look on the
+ * login page after typing.
+ *
+ * `box-shadow inset` is the canonical hack: paints a colored layer over
+ * the UA background. The huge transition delay neutralizes the brief
+ * flash before our `box-shadow` paints. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 30px var(--color-white) inset !important;
+  -webkit-text-fill-color: var(--color-dark) !important;
+  caret-color: var(--color-dark);
+  transition: background-color 5000s ease-in-out 0s;
+}

@@ -1,0 +1,563 @@
+{
+  "info": {
+    "name": "LIMS — Source",
+    "description": "Source master-data REST API. JWT Bearer auth (ADR-009). Run \"Login as admin\" first to seed {{accessToken}}.\n\nROUTES (both shapes ship — pick by use case):\n\n  Flat (master-data /sources page):\n    GET  /api/sources                      → listAll (FK includes: customer, sourceType, category)\n    POST /api/sources                      → createAll (customerID in BODY)\n\n  Nested (customer-scoped pages — Sample Collection, Customer profile):\n    GET  /api/customers/:customerID/sources  → list\n    POST /api/customers/:customerID/sources  → create (customerID from URL)\n\n  Flat (single-record):\n    GET  /api/sources/:sourceID            → getOne\n    PUT  /api/sources/:sourceID            → update\n    DEL  /api/sources/:sourceID            → softDelete\n\nPREREQUISITES (set collection variables before running):\n  - customerID: a valid Customer UUID (run Customer collection first)\n  - sourceTypeID: a valid SourceType UUID (run SourceType collection first)\n  - categoryID: a valid Category UUID (run Category collection first)\n\nRun top-to-bottom: the first POST seeds {{sourceID}} which subsequent requests reuse.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3033/api",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@lims.local",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin123",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerID",
+      "value": "REPLACE_WITH_VALID_CUSTOMER_UUID",
+      "type": "string"
+    },
+    {
+      "key": "sourceTypeID",
+      "value": "REPLACE_WITH_VALID_SOURCE_TYPE_UUID",
+      "type": "string"
+    },
+    {
+      "key": "categoryID",
+      "value": "REPLACE_WITH_VALID_CATEGORY_UUID",
+      "type": "string"
+    },
+    {
+      "key": "sourceID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List all sources (flat, master-data)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/sources?page=1&limit=20&sort=createdAt&order=desc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sources"
+          ],
+          "query": [
+            { "key": "page",         "value": "1" },
+            { "key": "limit",        "value": "20" },
+            { "key": "sort",         "value": "createdAt" },
+            { "key": "order",        "value": "desc" },
+            { "key": "search",       "value": "",     "disabled": true },
+            { "key": "customerID",   "value": "{{customerID}}",   "disabled": true },
+            { "key": "sourceTypeID", "value": "{{sourceTypeID}}", "disabled": true },
+            { "key": "categoryID",   "value": "{{categoryID}}",   "disabled": true },
+            { "key": "isActive",     "value": "true", "disabled": true }
+          ]
+        },
+        "description": "Global flat list across all customers. CUSTOMER role is auto-scoped to their own customerID via req.scope. Each row includes nested customer / sourceType / category objects (so the master-data table can render names without extra round-trips)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data is array', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('meta has total/page/limit/totalPages', () => {",
+              "  pm.expect(body.meta).to.have.all.keys('total','page','limit','totalPages');",
+              "});",
+              "if (body.data.length > 0) {",
+              "  const row = body.data[0];",
+              "  pm.test('row includes customer.name', () => pm.expect(row.customer).to.have.property('name'));",
+              "  pm.test('row includes sourceType.name', () => pm.expect(row.sourceType).to.have.property('name'));",
+              "  pm.test('row includes category.name', () => pm.expect(row.category).to.have.property('name'));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create source (flat, master-data)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerID\": \"{{customerID}}\",\n  \"sourceTypeID\": \"{{sourceTypeID}}\",\n  \"categoryID\": \"{{categoryID}}\",\n  \"sourceName\": \"MV Pacific Trader\",\n  \"equipmentName\": \"Aux Engine #2\",\n  \"componentType\": \"Engine\",\n  \"model\": \"Wartsila 9L20\",\n  \"make\": \"Wartsila\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/sources",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sources"
+          ]
+        },
+        "description": "Flat-route create for the master-data /sources page. customerID comes from the BODY (vs nested route which takes it from URL). All 3 FKs validated — invalid IDs return 404."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data.sourceID present', () => pm.expect(body.data.sourceID).to.be.a('string'));",
+              "pm.test('customerID from body', () => {",
+              "  pm.expect(body.data.customerID).to.eql(pm.variables.get('customerID'));",
+              "});",
+              "pm.test('audit fields populated', () => {",
+              "  pm.expect(body.data.createdBy).to.be.a('string');",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});",
+              "pm.collectionVariables.set('sourceID', body.data.sourceID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create flat with invalid customerID (expect 404)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerID\": \"00000000-0000-0000-0000-000000000000\",\n  \"sourceTypeID\": \"{{sourceTypeID}}\",\n  \"categoryID\": \"{{categoryID}}\",\n  \"sourceName\": \"Ghost Vessel\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/sources",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sources"
+          ]
+        },
+        "description": "Verifies flat-route FK check — invalid customerID in body returns 404 with 'Customer not found'."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message references Customer', () => pm.expect(body.message).to.match(/Customer/i));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List sources for customer (nested)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{customerID}}/sources?page=1&limit=20&sort=createdAt&order=desc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "{{customerID}}",
+            "sources"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            },
+            {
+              "key": "sort",
+              "value": "createdAt"
+            },
+            {
+              "key": "order",
+              "value": "desc"
+            },
+            {
+              "key": "search",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "sourceTypeID",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "categoryID",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "isActive",
+              "value": "true",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data is array', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('meta has total/page/limit/totalPages', () => {",
+              "  pm.expect(body.meta).to.have.all.keys('total','page','limit','totalPages');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create source (nested)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sourceTypeID\": \"{{sourceTypeID}}\",\n  \"categoryID\": \"{{categoryID}}\",\n  \"sourceName\": \"MV Atlantic Star\",\n  \"equipmentName\": \"Main Engine\",\n  \"componentType\": \"Engine\",\n  \"model\": \"MAN B&W 6S60MC\",\n  \"make\": \"MAN\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{customerID}}/sources",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "{{customerID}}",
+            "sources"
+          ]
+        },
+        "description": "Nested-route create — customerID from URL, NOT body. Used by Sample Collection / Customer profile pages."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data.sourceID present', () => pm.expect(body.data.sourceID).to.be.a('string'));",
+              "pm.test('customerID from URL', () => {",
+              "  pm.expect(body.data.customerID).to.eql(pm.variables.get('customerID'));",
+              "});",
+              "pm.test('sourceTypeID matches', () => {",
+              "  pm.expect(body.data.sourceTypeID).to.eql(pm.variables.get('sourceTypeID'));",
+              "});",
+              "pm.test('categoryID matches', () => {",
+              "  pm.expect(body.data.categoryID).to.eql(pm.variables.get('categoryID'));",
+              "});",
+              "pm.test('audit fields populated', () => {",
+              "  pm.expect(body.data.createdBy).to.be.a('string');",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});",
+              "pm.collectionVariables.set('sourceID', body.data.sourceID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create with invalid sourceTypeID (expect 404)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sourceTypeID\": \"00000000-0000-0000-0000-000000000000\",\n  \"categoryID\": \"{{categoryID}}\",\n  \"sourceName\": \"Test Vessel\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{customerID}}/sources",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "{{customerID}}",
+            "sources"
+          ]
+        },
+        "description": "Verifies explicit FK check — invalid sourceTypeID returns 404 with 'SourceType not found'."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message references SourceType', () => pm.expect(body.message).to.match(/SourceType/i));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create with invalid categoryID (expect 404)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sourceTypeID\": \"{{sourceTypeID}}\",\n  \"categoryID\": \"00000000-0000-0000-0000-000000000000\",\n  \"sourceName\": \"Test Vessel\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{customerID}}/sources",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "customers",
+            "{{customerID}}",
+            "sources"
+          ]
+        },
+        "description": "Verifies explicit FK check — invalid categoryID returns 404 with 'Category not found'."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message references Category', () => pm.expect(body.message).to.match(/Category/i));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get source by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/sources/{{sourceID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sources",
+            "{{sourceID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('matches requested ID', () => {",
+              "  pm.expect(body.data.sourceID).to.eql(pm.variables.get('sourceID'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update source (PUT)",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sourceTypeID\": \"{{sourceTypeID}}\",\n  \"categoryID\": \"{{categoryID}}\",\n  \"sourceName\": \"MV Atlantic Star\",\n  \"equipmentName\": \"Main Engine\",\n  \"componentType\": \"Engine\",\n  \"model\": \"MAN B&W 6S60MC-C\",\n  \"make\": \"MAN\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/sources/{{sourceID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sources",
+            "{{sourceID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('model updated', () => pm.expect(body.data.model).to.eql('MAN B&W 6S60MC-C'));",
+              "pm.test('updatedBy populated', () => {",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Soft delete source",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/sources/{{sourceID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sources",
+            "{{sourceID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+              "pm.test('empty body', () => pm.expect(pm.response.text()).to.have.lengthOf(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get deleted source (expect 404)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/sources/{{sourceID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "sources",
+            "{{sourceID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message references Source', () => pm.expect(body.message).to.match(/Source/i));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

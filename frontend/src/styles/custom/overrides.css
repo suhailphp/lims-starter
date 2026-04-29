@@ -1,0 +1,121 @@
+/* PrimeReact DataTable theming — copied verbatim from
+ * vendor/src/index.css (lines 94-133, 227-234, 547-550).
+ *
+ * Vendor loads these AFTER PrimeReact's lara-light-indigo theme to override
+ * the bare theme defaults (gray header row, body row padding, custom-datatable
+ * border treatment, hidden sort icon).
+ *
+ * Without these, PrimeReact renders with no header bg, cramped row padding,
+ * and visible sort triangles. */
+
+.p-datatable .p-datatable-thead > tr > th {
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  background-color: #f8f9fa;
+  color: #212529;
+  text-align: left;
+}
+
+.p-column-title {
+  color: var(--color-dark);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.p-datatable .p-datatable-tbody > tr > td {
+  padding: 0.75rem 1rem;
+  color: var(--color-default);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.p-sortable-column-icon {
+  opacity: 0;
+}
+
+.p-datatable-wrapper {
+  scrollbar-width: none;
+}
+
+.p-datatable-table {
+  border: 1px solid #e5e7eb;
+}
+
+.custom-datatable .p-datatable-table {
+  border: none;
+}
+
+.custom-datatable .p-datatable-thead {
+  border-top: 1px solid var(--color-border-color);
+}
+
+/* PrimeReact Calendar — vendor-polished sizing.
+ *
+ * Why: PrimeReact's lara-light-indigo bakes a 1rem font + ~0.5rem padding on
+ * .p-inputtext, and a 1rem panel font with ~2.5rem cells. Vendor's
+ * commonDatepicker demo passes `form-input` to inputClassName, but vendor's
+ * .form-input only marks px/text/bg as !important — py/max-h are NOT, so
+ * PrimeReact wins for vertical sizing. The panel is unstyled by vendor at
+ * all. Result: our pickers visibly larger than vendor demo.
+ *
+ * Fix: scope to `.custom-datepicker` so other PrimeReact text inputs
+ * elsewhere are untouched. Match `.form-input` exactly on the input, and
+ * compact the panel grid to text-sm. */
+
+.custom-datepicker .p-inputtext {
+  padding: 0.4375rem 0.625rem !important;        /* py-1.75 px-2.5 */
+  max-height: 35px;
+  font-size: 0.875rem;                            /* text-sm */
+  line-height: 1.25rem;
+  border-radius: 0.5rem;                          /* rounded-lg */
+  box-shadow: none;
+}
+
+/* Calendar panel — render at vendor demo density */
+.p-datepicker {
+  font-size: 0.875rem;
+  padding: 0.5rem;
+}
+
+.p-datepicker .p-datepicker-header {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.p-datepicker table {
+  font-size: 0.8125rem;                           /* 13px — vendor cell density */
+  margin: 0.25rem 0 0;
+}
+
+.p-datepicker table th,
+.p-datepicker table td {
+  padding: 0.125rem;
+}
+
+.p-datepicker table td > span {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.8125rem;
+  border-radius: 0.5rem;
+}
+
+.p-datepicker .p-datepicker-buttonbar {
+  padding: 0.5rem 0.25rem 0;
+}
+
+.p-datepicker .p-datepicker-buttonbar .p-button {
+  font-size: 0.8125rem;
+  padding: 0.375rem 0.75rem;
+}
+
+/* Time picker (datetime mode) — match the same compact density */
+.p-datepicker .p-timepicker {
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+}
+
+.p-datepicker .p-timepicker > div {
+  padding: 0 0.25rem;
+}

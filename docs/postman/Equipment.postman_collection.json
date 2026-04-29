@@ -1,0 +1,412 @@
+{
+  "info": {
+    "name": "LIMS — Equipment",
+    "description": "Equipment master-data REST API. JWT Bearer auth (ADR-009). Run \"Login as admin\" first to seed {{accessToken}}.\n\nFlat routes:\n  GET    /api/equipments\n  POST   /api/equipments\n  GET    /api/equipments/:equipmentID\n  PUT    /api/equipments/:equipmentID\n  DELETE /api/equipments/:equipmentID\n\nRun top-to-bottom: POST seeds {{equipmentID}} which subsequent requests reuse.\n\nNotes:\n  - calibrationStatus (VALID/DUE_SOON/OVERDUE/UNKNOWN) is a virtual getter — appears in every response automatically\n  - serialNumber must be unique among non-deleted records (case-insensitive)\n  - calibrationStatus filter on LIST translates to DB-level calibrationDueDate ranges",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3033/api",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@lims.local",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin123",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "equipmentID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List equipments",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/equipments?page=1&limit=20&sort=createdAt&order=desc",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "equipments"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            },
+            {
+              "key": "sort",
+              "value": "createdAt"
+            },
+            {
+              "key": "order",
+              "value": "desc"
+            },
+            {
+              "key": "search",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "isActive",
+              "value": "true",
+              "disabled": true
+            },
+            {
+              "key": "calibrationStatus",
+              "value": "OVERDUE",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data is array', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('meta has total/page/limit/totalPages', () => {",
+              "  pm.expect(body.meta).to.have.all.keys('total','page','limit','totalPages');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List equipments — filter calibrationStatus=OVERDUE",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/equipments?calibrationStatus=OVERDUE&page=1&limit=20",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "equipments"
+          ],
+          "query": [
+            {
+              "key": "calibrationStatus",
+              "value": "OVERDUE"
+            },
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('all results are OVERDUE', () => {",
+              "  body.data.forEach(item => {",
+              "    pm.expect(item.calibrationStatus).to.eql('OVERDUE');",
+              "  });",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create equipment (past calibrationDueDate → OVERDUE)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Flash Point Tester\",\n  \"model\": \"PM-93\",\n  \"serialNumber\": \"FPT-2024-001\",\n  \"calibrationDueDate\": \"2024-01-01\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/equipments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "equipments"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('data.equipmentID present', () => pm.expect(body.data.equipmentID).to.be.a('string'));",
+              "pm.test('calibrationStatus is OVERDUE', () => pm.expect(body.data.calibrationStatus).to.eql('OVERDUE'));",
+              "pm.test('audit fields populated', () => {",
+              "  pm.expect(body.data.createdBy).to.be.a('string');",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});",
+              "pm.collectionVariables.set('equipmentID', body.data.equipmentID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create duplicate serialNumber (expect 409)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Another Tester\",\n  \"serialNumber\": \"FPT-2024-001\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/equipments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "equipments"
+          ]
+        },
+        "description": "Same serialNumber as previous POST — must return 409 Conflict."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get equipment by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/equipments/{{equipmentID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "equipments",
+            "{{equipmentID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('matches requested ID', () => {",
+              "  pm.expect(body.data.equipmentID).to.eql(pm.variables.get('equipmentID'));",
+              "});",
+              "pm.test('calibrationStatus present', () => {",
+              "  pm.expect(body.data.calibrationStatus).to.be.oneOf(['VALID','DUE_SOON','OVERDUE','UNKNOWN']);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update equipment (PUT)",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Flash Point Tester\",\n  \"model\": \"PM-93\",\n  \"serialNumber\": \"FPT-2024-001\",\n  \"calibrationDueDate\": \"2030-12-31\",\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/equipments/{{equipmentID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "equipments",
+            "{{equipmentID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('calibrationStatus is VALID', () => pm.expect(body.data.calibrationStatus).to.eql('VALID'));",
+              "pm.test('updatedBy populated', () => {",
+              "  pm.expect(body.data.updatedBy).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Soft delete equipment",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/equipments/{{equipmentID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "equipments",
+            "{{equipmentID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+              "pm.test('empty body', () => pm.expect(pm.response.text()).to.have.lengthOf(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get deleted equipment (expect 404)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/equipments/{{equipmentID}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "equipments",
+            "{{equipmentID}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "const body = pm.response.json();",
+              "pm.test('success=false', () => pm.expect(body.success).to.be.false);",
+              "pm.test('message references Equipment', () => pm.expect(body.message).to.match(/Equipment/i));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

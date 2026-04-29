@@ -1,0 +1,126 @@
+{
+  "info": {
+    "name": "LIMS — AuditLog",
+    "description": "System-wide forensic data-change log.\n\nRoutes:\n  GET /api/audit-logs                                (ADMIN/MANAGER)\n  GET /api/audit-logs/:entityType/:entityID/history  (ADMIN/MANAGER)\n  GET /api/audit-logs/:auditLogID                    (ADMIN/MANAGER)\n\nWritten automatically by Sequelize hooks on 12 audited models. Each row carries a JSONB `changes` diff. Sort always createdAt DESC.\n\nFlow: Run 'Login as admin' first. Trigger any data mutation (e.g. via the Customer collection) to populate rows, then list them here.\n\nSee docs/modules/00-activity-logging.md and docs/decisions/ADR-useractivity-vs-auditlog.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",       "value": "http://localhost:3033/api", "type": "string" },
+    { "key": "adminEmail",    "value": "admin@lims.local",          "type": "string" },
+    { "key": "adminPassword", "value": "Admin123",                  "type": "string" },
+    { "key": "accessToken",   "value": "",                          "type": "string" },
+    { "key": "auditLogID",    "value": "",                          "type": "string" },
+    { "key": "entityType",    "value": "customer",                  "type": "string" },
+    { "key": "entityID",      "value": "",                          "type": "string" }
+  ],
+  "auth": { "type": "noauth" },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}" },
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res?.data?.accessToken) pm.collectionVariables.set('accessToken', res.data.accessToken);",
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "GET /audit-logs (full list, paginated)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/audit-logs?limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["audit-logs"],
+          "query": [{ "key": "limit", "value": "20" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const res = pm.response.json();",
+              "if (res?.data?.[0]?.auditLogID) pm.collectionVariables.set('auditLogID', res.data[0].auditLogID);",
+              "if (res?.data?.[0]?.entityID) pm.collectionVariables.set('entityID', res.data[0].entityID);",
+              "if (res?.data?.[0]?.entityType) pm.collectionVariables.set('entityType', res.data[0].entityType);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "GET /audit-logs (filter by entityType=customer)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/audit-logs?entityType=customer&action=UPDATE&limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["audit-logs"],
+          "query": [
+            { "key": "entityType", "value": "customer" },
+            { "key": "action", "value": "UPDATE" },
+            { "key": "limit", "value": "20" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /audit-logs/:entityType/:entityID/history",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/audit-logs/{{entityType}}/{{entityID}}/history",
+          "host": ["{{baseUrl}}"],
+          "path": ["audit-logs", "{{entityType}}", "{{entityID}}", "history"]
+        }
+      }
+    },
+    {
+      "name": "GET /audit-logs/:auditLogID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/audit-logs/{{auditLogID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["audit-logs", "{{auditLogID}}"]
+        }
+      }
+    }
+  ]
+}

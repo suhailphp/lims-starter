@@ -1,0 +1,139 @@
+{
+  "info": {
+    "name": "LIMS — Dashboard",
+    "description": "Admin Dashboard endpoint (Module 00 — Dashboard).\n\nRoutes:\n  GET /api/dashboard/admin-stats   (Bearer, ADMIN role only)\n\nReturns aggregated metrics, charts, equipment alerts, and recent activity for the Admin Dashboard page (`/dashboard`).\n\nAuth:\n  - 401 if no Bearer token.\n  - 403 if authenticated but role != ADMIN.\n  - 200 with full payload for ADMIN.\n\nRun the Auth → Login request first to seed `{{accessToken}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",     "value": "http://localhost:3033/api", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" }
+  ],
+  "auth": { "type": "noauth" },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const token = pm.collectionVariables.get('accessToken');",
+          "if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Admin Stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/dashboard/admin-stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["dashboard", "admin-stats"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
+              "pm.test('top-level keys', () => {",
+              "  const d = body.data;",
+              "  pm.expect(d).to.have.all.keys('metrics','charts','equipmentAlerts','equipmentStatus','quickStats','recentActivity','generatedAt');",
+              "});",
+              "pm.test('equipmentStatus shape', () => {",
+              "  const e = body.data.equipmentStatus;",
+              "  ['valid','dueSoon','overdue','unknown','inactive','total'].forEach(k => pm.expect(e).to.have.property(k).that.is.a('number'));",
+              "});",
+              "pm.test('quickStats shape', () => {",
+              "  const q = body.data.quickStats;",
+              "  ['activitiesToday','activeUsers24h','pendingCalibrations','recentLoginsToday'].forEach(k => pm.expect(q).to.have.property(k).that.is.a('number'));",
+              "});",
+              "pm.test('metrics shape', () => {",
+              "  const m = body.data.metrics;",
+              "  ['customers','tests','equipment','users','methods','categories','sources','sourceTypes','units','specifications','ocmElements','masterData'].forEach(k => pm.expect(m).to.have.property(k).that.is.a('number'));",
+              "});",
+              "pm.test('charts shape', () => {",
+              "  const c = body.data.charts;",
+              "  pm.expect(c.activityLast7Days).to.be.an('array').with.length(7);",
+              "  pm.expect(c.masterDataDistribution).to.be.an('array');",
+              "  pm.expect(c.distributionTotal).to.be.a('number');",
+              "});",
+              "pm.test('equipmentAlerts shape', () => {",
+              "  pm.expect(body.data.equipmentAlerts.overdue).to.be.an('array');",
+              "  pm.expect(body.data.equipmentAlerts.dueSoon).to.be.an('array');",
+              "});",
+              "pm.test('recentActivity ≤ 10 items', () => {",
+              "  pm.expect(body.data.recentActivity).to.be.an('array').with.lengthOf.at.most(10);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Stats — 401 (no token)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "", "disabled": false }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/dashboard/admin-stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["dashboard", "admin-stats"]
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.request.headers.remove('Authorization');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Stats — 403 (non-admin token)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "description": "Set {{accessToken}} to a TECHNICIAN/MANAGER token to verify the role guard.",
+        "url": {
+          "raw": "{{baseUrl}}/dashboard/admin-stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["dashboard", "admin-stats"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

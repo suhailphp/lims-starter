@@ -1,0 +1,28 @@
+/* LIMS — global stylesheet orchestrator.
+ *
+ * Cascade order (vendor first, our overrides last):
+ *   1. Tailwind core
+ *   2. Vendor theme (Dreams AI) — source of truth for tokens, components, animations
+ *   3. Our custom layer (overrides → LIMS components → utilities)
+ *
+ * Rule of thumb:
+ *   - DO NOT modify files in /styles/vendor/ — re-port from vendor folder if updates needed.
+ *   - Add to /styles/custom/ only when vendor doesn't cover it OR LIMS-specific.
+ *   - See docs/decisions/ADR-frontend-theme-integration.md
+ */
+
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+
+@import "./vendor/style.css";
+
+@import "./custom/overrides.css";
+@import "./custom/lims-components.css";
+@import "./custom/utilities.css";
+
+/* PrimeReact dark-mode overrides. Lara theme hardcodes light hex colors;
+ * this file maps the relevant PrimeReact selectors back to vendor's dark vars
+ * under `[data-theme="dark"]`. Light mode is untouched. */
+@import "./custom/primereact-dark.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));

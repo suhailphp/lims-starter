@@ -1,0 +1,192 @@
+/* LIMS — PrimeReact dark-mode overrides.
+ *
+ * PrimeReact's `lara-light-indigo` theme bakes light hex colors directly into
+ * its rules (no CSS vars). Toggling our `[data-theme="dark"]` flips vendor's
+ * tokens (--color-white, --color-dark, etc.) but the PrimeReact theme keeps
+ * painting tables and calendar panels with hard-coded `#f8f9fa`, `#e5e7eb`,
+ * `#374151`, etc. Result: dark page with light table chunks and invisible
+ * borders.
+ *
+ * This file maps PrimeReact's specific selectors back to vendor's dark
+ * variables. Light mode is untouched (selectors are scoped to
+ * `[data-theme="dark"]`). Drop new overrides here when we discover more
+ * leaks (e.g. when we use Dropdown / Tooltip / etc.).
+ *
+ * See ADR / patterns: "Dark mode + PrimeReact" in docs/patterns/master-data-page.md.
+ */
+
+/* =====================================================================
+ * DataTable
+ * ===================================================================== */
+
+[data-theme='dark'] .p-datatable .p-datatable-header,
+[data-theme='dark'] .p-datatable .p-datatable-footer {
+  background: var(--color-light);
+  color: var(--color-dark);
+  border-color: var(--color-border-color);
+}
+
+[data-theme='dark'] .p-datatable .p-datatable-thead > tr > th {
+  background-color: var(--color-light);
+  color: var(--color-dark);
+  border-color: var(--color-border-color);
+}
+
+[data-theme='dark'] .p-datatable .p-datatable-tbody > tr {
+  background-color: var(--color-white);
+  color: var(--color-default);
+}
+
+[data-theme='dark'] .p-datatable .p-datatable-tbody > tr > td {
+  background-color: transparent;
+  color: var(--color-default);
+  border-color: var(--color-border-color);
+}
+
+[data-theme='dark'] .p-datatable .p-datatable-tbody > tr:hover,
+[data-theme='dark'] .p-datatable .p-datatable-tbody > tr.p-highlight {
+  background-color: var(--color-light);
+}
+
+[data-theme='dark'] .p-datatable-table,
+[data-theme='dark'] .p-datatable .p-datatable-thead,
+[data-theme='dark'] .p-datatable .p-datatable-tfoot > tr > td {
+  border-color: var(--color-border-color);
+}
+
+[data-theme='dark'] .p-datatable .p-sortable-column .p-sortable-column-icon {
+  color: var(--color-default);
+}
+
+[data-theme='dark'] .p-datatable .p-sortable-column.p-highlight,
+[data-theme='dark'] .p-datatable .p-sortable-column.p-highlight .p-sortable-column-icon {
+  color: var(--color-primary);
+}
+
+/* PrimeReact paginator (we render our own, but PrimeReact's bleeds in via
+ * shared classes. Keep colors consistent for safety.) */
+[data-theme='dark'] .p-datatable .p-paginator-top,
+[data-theme='dark'] .p-datatable .p-paginator-bottom,
+[data-theme='dark'] .p-paginator {
+  background: var(--color-white);
+  color: var(--color-dark);
+  border-color: var(--color-border-color);
+}
+
+[data-theme='dark'] .p-paginator .p-paginator-pages .p-paginator-page,
+[data-theme='dark'] .p-paginator .p-paginator-first,
+[data-theme='dark'] .p-paginator .p-paginator-prev,
+[data-theme='dark'] .p-paginator .p-paginator-next,
+[data-theme='dark'] .p-paginator .p-paginator-last {
+  background: transparent;
+  color: var(--color-default);
+  border-color: var(--color-border-color);
+}
+
+[data-theme='dark'] .p-paginator .p-paginator-pages .p-paginator-page.p-highlight {
+  background: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+}
+
+/* =====================================================================
+ * Calendar (DateTimePicker / TimePicker — PrimeReact <Calendar />)
+ * ===================================================================== */
+
+[data-theme='dark'] .p-datepicker {
+  background: var(--color-white);
+  color: var(--color-dark);
+  border-color: var(--color-border-color);
+}
+
+[data-theme='dark'] .p-datepicker .p-datepicker-header {
+  background: var(--color-light);
+  color: var(--color-dark);
+  border-bottom-color: var(--color-border-color);
+}
+
+[data-theme='dark'] .p-datepicker .p-datepicker-prev,
+[data-theme='dark'] .p-datepicker .p-datepicker-next,
+[data-theme='dark'] .p-datepicker .p-datepicker-prev:hover,
+[data-theme='dark'] .p-datepicker .p-datepicker-next:hover {
+  color: var(--color-dark);
+  background: transparent;
+}
+
+[data-theme='dark'] .p-datepicker table th {
+  color: var(--color-default);
+  background: transparent;
+}
+
+[data-theme='dark'] .p-datepicker table td > span {
+  color: var(--color-dark);
+}
+
+[data-theme='dark'] .p-datepicker table td > span:hover,
+[data-theme='dark'] .p-datepicker table td.p-datepicker-today > span {
+  background: var(--color-primary-50);
+  color: var(--color-dark);
+}
+
+[data-theme='dark'] .p-datepicker table td.p-datepicker-today > span {
+  border-color: var(--color-primary);
+}
+
+[data-theme='dark'] .p-datepicker table td > span.p-highlight {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+[data-theme='dark'] .p-datepicker table td.p-datepicker-other-month > span {
+  color: var(--color-gray-500);
+}
+
+[data-theme='dark'] .p-datepicker .p-datepicker-buttonbar {
+  border-top-color: var(--color-border-color);
+}
+
+/* Year/month picker views */
+[data-theme='dark'] .p-datepicker .p-yearpicker .p-yearpicker-year,
+[data-theme='dark'] .p-datepicker .p-monthpicker .p-monthpicker-month {
+  color: var(--color-dark);
+}
+
+[data-theme='dark'] .p-datepicker .p-yearpicker .p-yearpicker-year:hover,
+[data-theme='dark'] .p-datepicker .p-monthpicker .p-monthpicker-month:hover {
+  background: var(--color-primary-50);
+}
+
+[data-theme='dark'] .p-datepicker .p-yearpicker .p-yearpicker-year.p-highlight,
+[data-theme='dark'] .p-datepicker .p-monthpicker .p-monthpicker-month.p-highlight {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+/* Time picker section */
+[data-theme='dark'] .p-datepicker .p-timepicker {
+  border-top-color: var(--color-border-color);
+}
+
+[data-theme='dark'] .p-datepicker .p-timepicker button {
+  color: var(--color-dark);
+}
+
+[data-theme='dark'] .p-datepicker .p-timepicker button:hover {
+  background: var(--color-light);
+}
+
+[data-theme='dark'] .p-datepicker .p-timepicker span {
+  color: var(--color-dark);
+}
+
+/* Calendar input itself uses our `inputClass()` so it inherits vendor vars. */
+
+/* =====================================================================
+ * Empty state inside DataTable (PrimeReact wraps the empty message)
+ * ===================================================================== */
+
+[data-theme='dark'] .p-datatable .p-datatable-emptymessage > td {
+  background-color: var(--color-white);
+  color: var(--color-default);
+  border-color: var(--color-border-color);
+}
