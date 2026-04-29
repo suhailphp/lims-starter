@@ -9,6 +9,7 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
+import { z } from 'zod'
 import { Dialog } from '@/components/ui/Dialog'
 import {
   FormField,
@@ -19,6 +20,12 @@ import {
   customerFormSchema,
   type CustomerFormValues,
 } from './customerSchema'
+
+/* Zod v4 produces asymmetric input/output types on `.transform()` chains
+ * (e.g. address: input `string | null | undefined` → output `string | null`).
+ * RHF's resolver types against the INPUT side, so we pass both generics
+ * explicitly: TFieldValues = input, TTransformedValues = output (= CustomerFormValues). */
+type CustomerFormInput = z.input<typeof customerFormSchema>
 import {
   useCreateCustomer,
   useUpdateCustomer,
@@ -37,23 +44,25 @@ interface Props {
   onSuccess?: (customer: Customer) => void
 }
 
-const DEFAULTS: CustomerFormValues = {
+const DEFAULTS: CustomerFormInput = {
   name: '',
   address: null,
   contactName: null,
   contactEmail: null,
   contactPhone: null,
+  trn: null,
   paymentTermsDays: 30,
   isActive: true,
 }
 
-function valuesFromCustomer(c: Customer): CustomerFormValues {
+function valuesFromCustomer(c: Customer): CustomerFormInput {
   return {
     name: c.name,
     address: c.address,
     contactName: c.contactName,
     contactEmail: c.contactEmail,
     contactPhone: c.contactPhone,
+    trn: c.trn,
     paymentTermsDays: c.paymentTermsDays,
     isActive: c.isActive,
   }
@@ -70,7 +79,7 @@ export function CustomerFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
     reset,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm<CustomerFormValues>({
+  } = useForm<CustomerFormInput, unknown, CustomerFormValues>({
     resolver: zodResolver(customerFormSchema),
     mode: 'onTouched',
     defaultValues: DEFAULTS,
@@ -89,6 +98,7 @@ export function CustomerFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
       contactName: values.contactName ?? null,
       contactEmail: values.contactEmail ?? null,
       contactPhone: values.contactPhone ?? null,
+      trn: values.trn ?? null,
       paymentTermsDays: values.paymentTermsDays,
       isActive: values.isActive,
     }
@@ -205,6 +215,23 @@ export function CustomerFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
               type="tel"
               {...register('contactPhone')}
               className={inputClass(!!errors.contactPhone)}
+            />
+          </FormField>
+
+          <FormField
+            id="customer-trn"
+            label="TRN (Tax Registration Number)"
+            error={errors.trn?.message}
+            helpText="Optional. Alphanumeric, max 20 chars."
+            className="sm:col-span-6 col-span-12"
+          >
+            <input
+              id="customer-trn"
+              type="text"
+              maxLength={20}
+              placeholder="e.g., 100366457800003"
+              {...register('trn')}
+              className={inputClass(!!errors.trn)}
             />
           </FormField>
 

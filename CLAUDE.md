@@ -4,9 +4,9 @@
 > working LIMS project. Replace domain-specific master data modules
 > (Tests, Equipment, Methods, OcmElement, Specifications, Sources,
 > SourceTypes, Categories, Units) with your project's entities. Foundation
-> modules (Auth, Users, Settings, Currency, Search, Notifications,
-> Activity/Audit, Dashboard, Attachments) and all locked patterns are
-> intended to be kept as-is.
+> modules (Auth, Users, Settings, Currency, Tax Rates, Search,
+> Notifications, Activity/Audit, Dashboard, Attachments) and all locked
+> patterns are intended to be kept as-is.
 
 ## Table of Contents
 
@@ -36,6 +36,7 @@
 - [Settings Rule](#settings-rule-locked-2026-04-28)
 - [Tenant Branding Rule](#tenant-branding-rule-locked)
 - [Currency Rule](#currency-rule-locked-2026-04-29) — multi-currency snapshot pattern
+- [Tax Rate Rule](#tax-rate-rule-locked-2026-04-29) — per-quote selection + atomic Set-Default
 - [Search Rule](#search-rule-locked-2026-04-29) — global search + `?view=` deep-link
 - [Backend Update Rule](#backend-update-rule) — `auditedUpdate`
 - [Domain rules](#rules) — sample/report/quote numbering, soft delete, audit fields
@@ -298,9 +299,9 @@ Two distinct systems, do NOT merge them. See
 - Automatic via Sequelize hooks. Each audited model calls
   `applyAuditLogging(Model, entityType, { excludeFields? })` after
   `applyAuditHooks` in its definition file.
-- 14 models currently audited: User, Attachment, Customer, Category,
+- 15 models currently audited: User, Attachment, Customer, Category,
   SourceType, Source, Equipment, OcmElement, Specification, Unit, Test,
-  Method, Currency, ExchangeRate.
+  Method, Currency, ExchangeRate, TaxRate.
 - **CRITICAL** `excludeFields`: `User: ['password']`,
   `Attachment: ['fileData', 'dataUrl']`. Always-stripped:
   `createdAt/updatedAt/deletedAt`. Adding a new sensitive field requires
@@ -656,6 +657,86 @@ setBaseCurrency(targetCurrencyID, userId)
 
 Reference: `/docs/postman/Currencies.postman_collection.json`.
 
+## Tax Rate Rule (LOCKED 2026-04-29)
+
+Lab-agnostic tax rate master data. Built BEFORE Quotes / Invoices so
+transactional modules lock against a stable contract. Customers do NOT
+have linked tax rates — tax is selected **per quote/invoice**. Customers
+carry only a `trn VARCHAR(20)` string for invoice display.
+
+**Schema** (`TaxRates` table):
+
+- `taxRateID` UUID PK, `code` VARCHAR(20), `name` VARCHAR(100),
+  `rate` DECIMAL(5,2), `type` ENUM('PERCENTAGE') (FIXED reserved),
+  `isDefault` BOOLEAN, `description` TEXT NULL, `displayOrder` INTEGER,
+  full audit + soft-delete.
+- **DB invariants** (partial unique indexes):
+  - `LOWER(code)` unique among non-deleted rows.
+  - At most one default tax rate (`isDefault WHERE isDefault=true`).
+- **Code regex**: `^[A-Z0-9_]+$`. Backend Zod auto-uppercases on input.
+
+**Seed** (4 rows, in migration):
+- `VAT_5` (UAE Standard VAT 5%, default), `EXEMPT` (0%), `VAT_10`
+  (Standard 10%), `GCC_5` (GCC Standard 5%).
+
+**Default tax rate invariants** (controller):
+- Default cannot be deleted (409).
+- Default cannot be deactivated (409).
+- `isDefault` is NOT in PUT body — strict Zod schema rejects (use
+  `set-default` endpoint).
+- First created row when no default exists auto-becomes default.
+
+**Set-Default flow** (`taxRateService.setDefaultTaxRate`) — mirrors
+Currency Set-Base exactly:
+1. Lock + reject if target inactive.
+2. Lock + flip current default off.
+3. Flip target default on.
+4. Update `Settings.default_tax_rate_code` row direct (bypasses
+   `settingsService.updateSetting` so the txn handle propagates).
+5. `setImmediate` → `settingsService.refreshCache()` post-commit.
+
+**Snapshot pattern for transactions** (LOCKED — Quotes/Invoices/Reports):
+At quote/invoice creation time, snapshot
+`{ taxRateCode, taxRate (numeric value at submit time) }` onto the
+parent row + per-line `taxAmount`. Snapshots are immutable; **never**
+re-read live rates to recompute historical documents. Same reasoning as
+Currency snapshot. ADR: `/docs/decisions/ADR-tax-rate-architecture.md`.
+
+**Two sources of "the default"** — both are kept in sync atomically:
+- `TaxRate.isDefault=true` row → drives the Tax Rates page UI badge +
+  set-default flow + DB-level uniqueness.
+- `Settings.default_tax_rate_code` → drives Quote/Invoice form
+  pre-selection without an extra fetch.
+
+**Endpoints** (all `requireJwtAuth`; reads any user, writes ADMIN):
+- `GET    /api/tax-rates`                   list (search + isActive + isDefault + sort)
+- `GET    /api/tax-rates/:id`               detail
+- `POST   /api/tax-rates`                   create
+- `PUT    /api/tax-rates/:id`               update (rejects isDefault)
+- `DELETE /api/tax-rates/:id`               soft delete
+- `PUT    /api/tax-rates/:id/set-default`   atomic flip + settings sync
+
+**Customer TRN field** (added in this task):
+- `Customers.trn VARCHAR(20) NULL`. Optional. Alphanumeric only
+  (`^[A-Za-z0-9]+$`). Surfaced in Customer Form Dialog (after Phone)
+  and Customer View Dialog (Billing section). Not in the list table.
+
+**Settings additions** (5 keys, all isPublic=false):
+- `tenant.bank_name`, `tenant.bank_branch`, `tenant.bank_account_number`,
+  `tenant.bank_iban` (Lab Information → Bank Details subsection).
+- `workflow.default_tax_rate_code` (Workflow Defaults → Tax subsection,
+  populated from `/api/tax-rates?isActive=true`).
+
+**Reusing for any future "one-of-N flag" entity**: same pattern as
+Method's `isDefault` per Test, Currency's `isBase`. Single partial
+unique index + service-layer atomic flip. If the flag also drives a
+Settings row, the flip writes BOTH inside one transaction and refreshes
+the settings cache `setImmediate` after commit.
+
+References: `/docs/modules/00-tax-rates.md`,
+`/docs/decisions/ADR-tax-rate-architecture.md`,
+`/docs/postman/TaxRates.postman_collection.json`.
+
 ## Search Rule (LOCKED 2026-04-29)
 
 Lab-agnostic global search. Single endpoint, single page. Built BEFORE
@@ -775,6 +856,7 @@ References: `/docs/modules/00-search.md`,
 0. Notifications            ✅ Complete (two-table + scope routing; bell + dropdown + page; 4 initial event hooks shipped 2026-04-28)
 0. Currency                 ✅ Complete (multi-currency foundation: Currencies + ExchangeRates + open-ended history + atomic Set-Base; shipped 2026-04-29)
 0. Search                   ✅ Complete (global search across 8 entities + ⌘K + `/search` page + `?view=` deep-link contract; shipped 2026-04-29)
+0. Tax Rates                ✅ Complete (master data + per-quote selection + atomic Set-Default + Customer.trn + bank settings; shipped 2026-04-29)
 1. Master Data              ✅ Complete (10 APIs; User CRUD moved to Auth module)
 2. Auth & User Management   ✅ Complete (JWT + User CRUD + photos; ADR-006 stub removed)
 
@@ -790,12 +872,13 @@ References: `/docs/modules/00-search.md`,
 9. Settings                 ✅ Complete (key/value store; 4 categories; live system settings)
 10. Currency UI             ✅ Complete (Currencies page + 5 dialogs: View/Add/Edit/Delete/UpdateRate/SetBase; rate history timeline; Localization form integrated; shipped 2026-04-29)
 11. Global Search UI        ✅ Complete (`/search` page + tab-pill filter + 2-column card grid + inline match highlighting + ⌘K + `?view=` auto-open on Customers/Tests; shipped 2026-04-29)
+12. Tax Rates UI            ✅ Complete (Tax Rates page + 4 dialogs: View/Add/Edit/Delete + SetDefault with implications copy; Customer TRN field; Settings Bank Details + Default Tax dropdown; shipped 2026-04-29)
 
 ## Sidebar Structure
 Two-column vendor sidebar. Left-column icons map to right-column section panels:
 - 🏠 Home → Dashboard
 - 👥 Customers → Customers, Sources, Source Types
-- 📦 Master Data → Categories, Units, Tests, Methods, Specifications, Equipment, OCM Elements, Currencies
+- 📦 Master Data → Categories, Units, Tests, Methods, Specifications, Equipment, OCM Elements, Currencies, Tax Rates
 - ⚙️ Administration → Users, Settings
 
 Source Types and Sources sit under **Customers** (not Master Data) because they
@@ -974,6 +1057,8 @@ References:
 - `settingsService.js` — in-memory cache + `getSetting(key, fallback)`.
   Lazy `require('../models')` inside functions (circular dep).
 - `currencyService.js` — base/current-rate lookups + atomic Set Base.
+- `taxRateService.js` — default lookup + atomic Set-Default (mirrors
+  currencyService Set-Base; updates `Settings.default_tax_rate_code`).
 
 **Backend middleware** (`/backend/src/middleware/`):
 - `requireJwtAuth.js` — sets `req.user`, updates ALS context.
@@ -1043,6 +1128,48 @@ deliberately left out.
   30s polling).
 
 ## Current Work
+**Module 00 — Tax Rates (per-quote tax selection foundation)** ✅ **COMPLETE (2026-04-29).**
+Built BEFORE Quotes / Invoices so transactional modules lock against
+a stable contract. Customers do NOT carry tax rates — tax is selected
+per quote/invoice. Customers carry only a `trn VARCHAR(20)` string for
+invoice display.
+
+Schema: `TaxRates` table with partial unique indexes (case-insensitive
+code uniqueness + single default). Seed: VAT_5 (default), EXEMPT,
+VAT_10, GCC_5. Default cannot be deleted, deactivated, or modified
+via PUT (use `/set-default`).
+
+Atomic Set-Default flow (`taxRateService.setDefaultTaxRate`) flips
+both the `isDefault` row AND `Settings.default_tax_rate_code` in one
+transaction; settings cache refreshes post-commit. Mirrors Currency
+Set-Base pattern exactly.
+
+Customer model gained `trn VARCHAR(20) NULL` (alphanumeric, optional).
+Settings gained 5 new keys: 4 bank details under tenant
+(`bank_name/branch/account_number/iban`) + `default_tax_rate_code`
+under workflow. All isPublic=false.
+
+Frontend: `/tax-rates` master-data page reuses Currency template +
+SetDefaultTaxRateDialog with implications copy. Customer Form Dialog
+gained TRN input. Customer View Dialog shows TRN in Billing section.
+Settings: Lab Information form gained "Bank Details" subsection;
+Workflow Defaults gained "Tax" subsection with FKSelect dropdown
+populated from `/api/tax-rates?isActive=true`.
+
+Verified end-to-end (2026-04-29) via curl + 17-request Postman:
+- 4 seed rows, VAT_5 default; isDefault filter returns only VAT_5.
+- DELETE default → 409; PUT isActive=false on default → 409.
+- POST cst_12 (lowercase) after CST_12 created → 409 (case-insensitive guard).
+- PUT body with isDefault=true → 422.
+- Set CST_12 as default → 200; VAT_5 flips false; settings cache flips to CST_12.
+- Restore VAT_5 → setting flips back atomically.
+- Customer create with TRN round-trips on create + GET.
+- Customer create with `"100 366 4578"` (spaces) → 422.
+
+References: `/docs/modules/00-tax-rates.md`,
+`/docs/decisions/ADR-tax-rate-architecture.md`,
+`/docs/postman/TaxRates.postman_collection.json`.
+
 **Module 00 — Currency (multi-currency foundation)** ✅ **COMPLETE (2026-04-29).**
 Lab-agnostic foundation built BEFORE Quotes / Invoices / Reports so
 transactional modules lock against a stable contract from day one.

@@ -154,7 +154,7 @@
         "header": [],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"Petroleum Trading LLC\",\n  \"address\": \"Plot 12, Industrial Area, Sharjah\",\n  \"contactName\": \"Ahmed Khan\",\n  \"contactEmail\": \"ahmed@petroleum-trading.example\",\n  \"contactPhone\": \"+971-50-1234567\",\n  \"paymentTermsDays\": 30,\n  \"isActive\": true\n}"
+          "raw": "{\n  \"name\": \"Petroleum Trading LLC\",\n  \"address\": \"Plot 12, Industrial Area, Sharjah\",\n  \"contactName\": \"Ahmed Khan\",\n  \"contactEmail\": \"ahmed@petroleum-trading.example\",\n  \"contactPhone\": \"+971-50-1234567\",\n  \"trn\": \"100366457800003\",\n  \"paymentTermsDays\": 30,\n  \"isActive\": true\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/customers",
@@ -180,6 +180,7 @@
               "  pm.expect(body.data.createdBy).to.be.a('string');",
               "  pm.expect(body.data.updatedBy).to.be.a('string');",
               "});",
+              "pm.test('trn round-trips', () => pm.expect(body.data.trn).to.eql('100366457800003'));",
               "pm.collectionVariables.set('customerID', body.data.customerID);"
             ]
           }
@@ -213,7 +214,8 @@
               "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
               "pm.test('matches requested ID', () => {",
               "  pm.expect(body.data.customerID).to.eql(pm.variables.get('customerID'));",
-              "});"
+              "});",
+              "pm.test('trn field present on GET', () => pm.expect(body.data.trn).to.eql('100366457800003'));"
             ]
           }
         }
@@ -226,7 +228,7 @@
         "header": [],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"Petroleum Trading LLC\",\n  \"address\": \"Plot 12, Industrial Area, Sharjah\",\n  \"contactName\": \"Ahmed Khan\",\n  \"contactEmail\": \"ahmed@petroleum-trading.example\",\n  \"contactPhone\": \"+971-50-9999999\",\n  \"paymentTermsDays\": 45,\n  \"isActive\": true\n}"
+          "raw": "{\n  \"name\": \"Petroleum Trading LLC\",\n  \"address\": \"Plot 12, Industrial Area, Sharjah\",\n  \"contactName\": \"Ahmed Khan\",\n  \"contactEmail\": \"ahmed@petroleum-trading.example\",\n  \"contactPhone\": \"+971-50-9999999\",\n  \"trn\": \"100366457800099\",\n  \"paymentTermsDays\": 45,\n  \"isActive\": true\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/customers/{{customerID}}",
@@ -250,6 +252,7 @@
               "pm.test('success=true', () => pm.expect(body.success).to.be.true);",
               "pm.test('paymentTermsDays updated', () => pm.expect(body.data.paymentTermsDays).to.eql(45));",
               "pm.test('contactPhone updated', () => pm.expect(body.data.contactPhone).to.eql('+971-50-9999999'));",
+              "pm.test('trn updated', () => pm.expect(body.data.trn).to.eql('100366457800099'));",
               "pm.test('updatedBy populated', () => {",
               "  pm.expect(body.data.updatedBy).to.be.a('string');",
               "});"

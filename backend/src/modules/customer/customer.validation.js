@@ -23,6 +23,14 @@ const customerBodySchema = z
       .optional()
       .transform((v) => (v === '' ? null : v)),
     contactPhone: nullableTrimmed(30),
+    trn: z
+      .string()
+      .trim()
+      .max(20, 'TRN must be 20 characters or fewer')
+      .regex(/^[A-Za-z0-9]*$/, 'TRN must be alphanumeric')
+      .nullable()
+      .optional()
+      .transform((v) => (v == null || v === '' ? null : v)),
     paymentTermsDays: z
       .number()
       .int('Must be an integer')

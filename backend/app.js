@@ -27,6 +27,7 @@ const notificationRoutes = require('./src/modules/notification/notification.rout
 const dashboardRoutes = require('./src/modules/dashboard/dashboard.routes');
 const settingsRoutes = require('./src/modules/settings/settings.routes');
 const currencyRoutes = require('./src/modules/currency/currency.routes');
+const taxRateRoutes = require('./src/modules/taxRate/taxRate.routes');
 const searchRoutes = require('./src/modules/search/search.routes');
 
 const app = express();
@@ -80,6 +81,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/currencies', currencyRoutes);
+app.use('/api/tax-rates', taxRateRoutes);
 app.use('/api/search', searchRoutes);
 
 app.use(notFound);

@@ -1,6 +1,7 @@
 /* DOMAIN — Lab Information form (tenant category). */
 import { useEffect, useState } from 'react'
 import {
+  IconBuildingBank,
   IconBuildingStore,
   IconMapPin,
   IconPhone,
@@ -32,6 +33,10 @@ const KEYS = [
   'lab_phone',
   'lab_email',
   'lab_website',
+  'bank_name',
+  'bank_branch',
+  'bank_account_number',
+  'bank_iban',
 ] as const
 
 type FormState = Record<(typeof KEYS)[number], string>
@@ -223,7 +228,7 @@ export function LabInformationForm({ logoAttachment, onLogoUploaded }: Props) {
         </div>
       </Subsection>
 
-      <Subsection title="Contact" Icon={IconPhone} last>
+      <Subsection title="Contact" Icon={IconPhone}>
         <div className="grid md:grid-cols-2 gap-4">
           <FieldShell label="Phone">
             <input
@@ -255,6 +260,49 @@ export function LabInformationForm({ logoAttachment, onLogoUploaded }: Props) {
               />
             </FieldShell>
           </div>
+        </div>
+      </Subsection>
+
+      <Subsection title="Bank Details" Icon={IconBuildingBank} last>
+        <div className="grid md:grid-cols-2 gap-4">
+          <FieldShell
+            label="Bank Name"
+            hint={findRow(rows, 'bank_name')?.description}
+          >
+            <input
+              type="text"
+              className={inputClass}
+              value={form.bank_name}
+              onChange={(e) => setField('bank_name', e.target.value)}
+            />
+          </FieldShell>
+          <FieldShell label="Branch">
+            <input
+              type="text"
+              className={inputClass}
+              value={form.bank_branch}
+              onChange={(e) => setField('bank_branch', e.target.value)}
+            />
+          </FieldShell>
+          <FieldShell label="Account Number">
+            <input
+              type="text"
+              className={inputClass}
+              value={form.bank_account_number}
+              onChange={(e) => setField('bank_account_number', e.target.value)}
+            />
+          </FieldShell>
+          <FieldShell
+            label="IBAN"
+            hint={findRow(rows, 'bank_iban')?.description}
+          >
+            <input
+              type="text"
+              className={`${inputClass} font-mono`}
+              value={form.bank_iban}
+              onChange={(e) => setField('bank_iban', e.target.value)}
+            />
+          </FieldShell>
         </div>
       </Subsection>
     </SectionFormFrame>

@@ -29,6 +29,14 @@ export const customerFormSchema = z.object({
     .or(z.literal(''))
     .transform((v) => (v == null || v === '' ? null : v)),
   contactPhone: trimmedNullable(30),
+  trn: z
+    .string()
+    .trim()
+    .max(20, 'Must be 20 characters or fewer')
+    .regex(/^[A-Za-z0-9]*$/, 'TRN must be alphanumeric (no spaces)')
+    .nullable()
+    .optional()
+    .transform((v) => (v == null || v === '' ? null : v)),
   paymentTermsDays: z.coerce
     .number({ message: 'Must be a whole number' })
     .int('Must be a whole number')

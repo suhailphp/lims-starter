@@ -36,6 +36,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(30),
         allowNull: true,
       },
+      trn: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+      },
       paymentTermsDays: {
         type: DataTypes.INTEGER,
         allowNull: false,

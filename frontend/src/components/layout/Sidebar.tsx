@@ -17,6 +17,7 @@ import {
   IconTool,
   IconAtom,
   IconCurrencyDollar,
+  IconReceiptTax,
   IconUserCog,
   IconChevronLeft,
   IconChevronRight,
@@ -79,6 +80,7 @@ const SECTIONS: Section[] = [
       { label: 'Equipment',      path: '/equipment',      icon: IconTool },
       { label: 'OCM Elements',   path: '/ocm-elements',   icon: IconAtom },
       { label: 'Currencies',     path: '/currencies',     icon: IconCurrencyDollar },
+      { label: 'Tax Rates',      path: '/tax-rates',      icon: IconReceiptTax },
     ],
   },
   {

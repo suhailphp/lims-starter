@@ -89,7 +89,55 @@
           "host": ["{{baseUrl}}"],
           "path": ["settings", "category", "tenant"]
         }
-      }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const keys = pm.response.json().data.map(r => r.settingKey);",
+              "pm.test('bank settings present', () => {",
+              "  ['bank_name','bank_branch','bank_account_number','bank_iban'].forEach(k => pm.expect(keys).to.include(k));",
+              "});",
+              "pm.test('bank settings are private (isPublic=false)', () => {",
+              "  pm.response.json().data",
+              "    .filter(r => r.settingKey.startsWith('bank_'))",
+              "    .forEach(r => pm.expect(r.isPublic).to.be.false);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get By Category — workflow",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/settings/category/workflow",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "category", "workflow"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const row = pm.response.json().data.find(r => r.settingKey === 'default_tax_rate_code');",
+              "pm.test('default_tax_rate_code row exists', () => pm.expect(row).to.not.be.undefined);",
+              "pm.test('default_tax_rate_code value=VAT_5', () => pm.expect(row.value).to.eql('VAT_5'));",
+              "pm.test('default_tax_rate_code is private', () => pm.expect(row.isPublic).to.be.false);",
+              "pm.test('default_tax_rate_code editable', () => pm.expect(row.isEditable).to.be.true);"
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "Update Single — lab_name",
@@ -155,7 +203,7 @@
         "header": [],
         "body": {
           "mode": "raw",
-          "raw": "{ \"currency_code\": \"AED\", \"currency_symbol\": \"د.إ\" }"
+          "raw": "{ \"currency_code\": \"USD\", \"currency_symbol\": \"$\" }"
         },
         "url": {
           "raw": "{{baseUrl}}/settings/bulk",

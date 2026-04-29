@@ -1,30 +1,30 @@
-/* DOMAIN — Customer View modal (read-only).
- * Header = customer.name. Body = labeled rows + status badge + audit timestamps.
- * Footer = Close / Delete (role-gated) / Edit.
- * See CLAUDE.md "View Pattern Rule".
- */
+/* DOMAIN — Tax Rate View modal (read-only). */
 import { Dialog } from '@/components/ui/Dialog'
-import { useAppSelector } from '@/hooks/useAppSelector'
-import type { Customer } from '@/types/customer'
+import { IconStar } from '@tabler/icons-react'
+import type { TaxRate } from '@/types/taxRate'
 
 interface Props {
-  customer: Customer | null
+  taxRate: TaxRate | null
   onClose: () => void
-  onEdit: (customer: Customer) => void
-  onDelete: (customer: Customer) => void
+  onEdit: (row: TaxRate) => void
+  onDelete: (row: TaxRate) => void
+  onSetDefault: (row: TaxRate) => void
 }
 
-export function CustomerViewDialog({ customer, onClose, onEdit, onDelete }: Props) {
-  const role = useAppSelector((s) => s.auth.user?.role)
-  const canDelete = role !== 'CUSTOMER'
-
-  if (!customer) return null
+export function TaxRateViewDialog({
+  taxRate,
+  onClose,
+  onEdit,
+  onDelete,
+  onSetDefault,
+}: Props) {
+  if (!taxRate) return null
 
   return (
     <Dialog
-      open={!!customer}
+      open={!!taxRate}
       onOpenChange={(o) => !o && onClose()}
-      title={customer.name}
+      title={`${taxRate.code} — ${taxRate.name}`}
       maxWidth="640px"
       footer={
         <>
@@ -35,18 +35,28 @@ export function CustomerViewDialog({ customer, onClose, onEdit, onDelete }: Prop
           >
             Close
           </button>
-          {canDelete && (
+          {!taxRate.isDefault && (
             <button
               type="button"
-              onClick={() => onDelete(customer)}
+              onClick={() => onDelete(taxRate)}
               className="btn bg-danger border border-danger text-white hover:bg-danger-700"
             >
               Delete
             </button>
           )}
+          {!taxRate.isDefault && taxRate.isActive && (
+            <button
+              type="button"
+              onClick={() => onSetDefault(taxRate)}
+              className="btn bg-white border border-border-color text-dark hover:bg-light"
+            >
+              <IconStar size={14} className="me-1" />
+              Set as Default
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => onEdit(customer)}
+            onClick={() => onEdit(taxRate)}
             className="btn bg-primary border border-primary text-white hover:bg-primary-800"
           >
             Edit
@@ -55,26 +65,20 @@ export function CustomerViewDialog({ customer, onClose, onEdit, onDelete }: Prop
       }
     >
       <div className="flex flex-col gap-5">
-        <Section title="Contact">
-          <ViewField label="Contact Person" value={customer.contactName} />
-          <ViewField label="Email" value={customer.contactEmail} />
-          <ViewField label="Phone" value={customer.contactPhone} />
-        </Section>
-
-        <Section title="Billing">
-          <ViewField label="Address" value={customer.address} multiline />
-          <ViewField label="TRN" value={customer.trn} />
-          <ViewField
-            label="Payment Terms"
-            value={`${customer.paymentTermsDays} days`}
-          />
+        <Section title="Details">
+          <ViewField label="Code" value={taxRate.code} mono />
+          <ViewField label="Name" value={taxRate.name} />
+          <ViewField label="Rate" value={`${trimTrailingZeros(taxRate.rate)}%`} mono />
+          <ViewField label="Type" value={taxRate.type} />
+          <ViewField label="Display Order" value={String(taxRate.displayOrder)} />
+          <ViewField label="Description" value={taxRate.description ?? '—'} />
         </Section>
 
         <Section title="Status">
           <div className="grid grid-cols-3 gap-2 py-1.5">
             <span className="col-span-1 text-sm text-default">Status</span>
-            <span className="col-span-2">
-              {customer.isActive ? (
+            <span className="col-span-2 flex items-center gap-2">
+              {taxRate.isActive ? (
                 <span className="inline-flex items-center badge rounded-lg text-xs font-medium bg-success-50 text-success border border-success">
                   <span className="bg-success w-[5px] h-[5px] block rounded-full me-1" />
                   Active
@@ -85,16 +89,19 @@ export function CustomerViewDialog({ customer, onClose, onEdit, onDelete }: Prop
                   Inactive
                 </span>
               )}
+              {taxRate.isDefault && (
+                <span className="inline-flex items-center badge rounded-lg text-xs font-medium bg-primary-50 text-primary border border-primary">
+                  <IconStar size={10} className="me-1" />
+                  Default
+                </span>
+              )}
             </span>
           </div>
         </Section>
 
         <Section title="Audit">
-          <ViewField label="Created" value={formatDateTime(customer.createdAt)} />
-          <ViewField
-            label="Last Updated"
-            value={formatDateTime(customer.updatedAt)}
-          />
+          <ViewField label="Created" value={formatDateTime(taxRate.createdAt)} />
+          <ViewField label="Last Updated" value={formatDateTime(taxRate.updatedAt)} />
         </Section>
       </div>
     </Dialog>
@@ -119,25 +126,28 @@ function Section({
 function ViewField({
   label,
   value,
-  multiline = false,
+  mono,
 }: {
   label: string
   value: string | null | undefined
-  multiline?: boolean
+  mono?: boolean
 }) {
   const empty = value == null || value === ''
   return (
     <div className="grid grid-cols-3 gap-2 py-1.5">
       <span className="col-span-1 text-sm text-default">{label}</span>
       <span
-        className={`col-span-2 text-sm ${
-          empty ? 'text-gray-400' : 'text-dark'
-        } ${multiline ? 'whitespace-pre-line break-words' : ''}`}
+        className={`col-span-2 text-sm ${empty ? 'text-gray-400' : 'text-dark'} ${mono ? 'font-mono' : ''}`}
       >
         {empty ? '—' : value}
       </span>
     </div>
   )
+}
+
+function trimTrailingZeros(s: string): string {
+  if (!s.includes('.')) return s
+  return s.replace(/\.?0+$/, '')
 }
 
 function formatDateTime(iso: string): string {

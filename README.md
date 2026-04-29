@@ -3,9 +3,9 @@
 A working full-stack starter extracted from a production LIMS (Laboratory
 Information Management System). It contains real implementations of the
 patterns most SaaS projects need on day one — auth, users, settings,
-attachments, search, notifications, audit logging, multi-currency, and a
-master-data CRUD template — so you can clone, rename, and start building
-your domain instead of rebuilding plumbing.
+attachments, search, notifications, audit logging, multi-currency,
+tax rates, and a master-data CRUD template — so you can clone, rename,
+and start building your domain instead of rebuilding plumbing.
 
 This starter keeps the original LIMS modules (Tests, Equipment, Methods,
 etc.) as **working examples** of the locked patterns. Replace, rename, or
@@ -48,8 +48,8 @@ cd ../frontend && npm run dev   # http://localhost:5173
 
 **Foundations (keep as-is)**
 - **Auth** — JWT access + refresh tokens, account lockout, password
-  reset (admin in-app, one-shot temp password reveal), `mustChangePassword`
-  flow.
+  reset (admin in-app, one-shot temp password reveal),
+  `mustChangePassword` flow.
 - **Users** — full CRUD, role badges, self-row gating, profile photos.
 - **Profile** — vendor-style banner, avatar upload, activity feed.
 - **Activity & Audit Logging** — two systems: `UserActivity` (manual,
@@ -59,13 +59,16 @@ cd ../frontend && npm run dev   # http://localhost:5173
   (PERSONAL / CUSTOMER / LAB), bell badge, dropdown, `/notifications`
   page.
 - **Settings** — key/value store with 4 categories, in-memory cache,
-  public unauth endpoint for pre-login branding, lab logo upload.
+  public unauth endpoint for pre-login branding, lab logo upload, bank
+  details + default tax-rate fields.
 - **Currency** — multi-currency master data + open-ended exchange-rate
   history, atomic Set-Base flow, snapshot pattern for transactions.
-- **Search** — global search across 8 entities, ⌘K shortcut, `/search`
-  page, `?view=` deep-link contract.
-- **Dashboard** — admin overview with chart.js donuts, equipment
-  alerts, recent activity feed.
+- **Tax Rates** — master data + per-quote selection + atomic Set-Default,
+  Customer TRN field, Settings integration.
+- **Search** — global search across the seeded entities, ⌘K shortcut,
+  `/search` page, `?view=` deep-link contract.
+- **Dashboard** — admin overview with chart.js donuts, equipment alerts,
+  recent activity feed.
 - **Attachments** — DB-base64 storage, transactional replace + hard
   delete, `<Avatar>` and `<AttachmentUpload>` components.
 
@@ -73,7 +76,8 @@ cd ../frontend && npm run dev   # http://localhost:5173
 
 Ten LIMS-specific master-data pages built from the same locked
 template — Customer, SourceTypes, Sources, Categories, Equipment,
-OcmElements, Specifications, Units, Tests, Methods. Each ships with:
+OcmElements, Specifications, Units, Tests, Methods (plus Tax Rates
+following the same pattern). Each ships with:
 
 - FilterMenu (chips + FK dropdowns + batch Apply)
 - Activate/Deactivate with optimistic UI
@@ -102,6 +106,7 @@ Read it before writing new code. Highlights:
 - Notifications Rule
 - Settings + Tenant Branding Rule
 - Currency Rule (snapshot pattern)
+- Tax Rate Rule (per-quote selection + atomic Set-Default)
 - Search Rule (`?view=` deep-link contract)
 - Master-Data UI Replication Rule (`FKSelect`, `EnumSelect`,
   `DateTimePicker`, `FilterMenu`, dark-mode tokens)

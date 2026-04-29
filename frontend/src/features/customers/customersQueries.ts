@@ -95,6 +95,7 @@ export function useToggleActiveCustomer() {
         contactName: customer.contactName,
         contactEmail: customer.contactEmail,
         contactPhone: customer.contactPhone,
+        trn: customer.trn,
         paymentTermsDays: customer.paymentTermsDays,
         isActive: nextActive,
       }),

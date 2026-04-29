@@ -46,6 +46,7 @@ Must be completed before any operational module.
 - contactName (VARCHAR 100)
 - contactEmail (VARCHAR 150, isEmail validation)
 - contactPhone (VARCHAR 30)
+- trn (VARCHAR 20, optional — Tax Registration Number, alphanumeric, displayed on invoices). Added 2026-04-29 alongside Tax Rates module.
 - paymentTermsDays (INT, default 30)
 - + audit fields
 

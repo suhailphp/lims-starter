@@ -1,0 +1,540 @@
+{
+  "info": {
+    "name": "LIMS — Tax Rates",
+    "description": "Tax Rate master data — configurable VAT/exempt rates referenced by future Quote/Invoice modules.\n\nRoutes (all under /api/tax-rates, JWT required, writes ADMIN-only):\n  GET    /                        list (filters: search, isActive, isDefault)\n  GET    /:taxRateID              detail\n  POST   /                        create (first when no default exists auto-becomes default)\n  PUT    /:taxRateID              update (rejects isDefault — use /set-default)\n  DELETE /:taxRateID              soft delete (cannot delete default)\n  PUT    /:taxRateID/set-default  atomic flip + sync settings.default_tax_rate_code\n\nIntegration: Customer.trn (TRN field on Customer model) + Settings keys (bank_*, default_tax_rate_code) — assertions for those live in this collection too so the suite covers all three task parts in one run.\n\nFlow: Run 'Login as admin' first to seed {{accessToken}}. Steps 1, 4 capture {{vat5ID}}, {{cst12ID}}. Cleanup at the end restores VAT_5 default + deletes the test customer.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",       "value": "http://localhost:3033/api", "type": "string" },
+    { "key": "adminEmail",    "value": "admin@lims.local",          "type": "string" },
+    { "key": "adminPassword", "value": "Admin123",                  "type": "string" },
+    { "key": "accessToken",   "value": "",                          "type": "string" },
+    { "key": "vat5ID",        "value": "",                          "type": "string" },
+    { "key": "cst12ID",       "value": "",                          "type": "string" },
+    { "key": "trnCustomerID", "value": "",                          "type": "string" }
+  ],
+  "auth": { "type": "noauth" },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "const path = pm.request.url.getPath();",
+          "const isLogin = /\\/auth\\/login$/.test(path);",
+          "if (!isLogin) {",
+          "  const token = pm.collectionVariables.get('accessToken');",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Login as admin (seeds {{accessToken}})",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('accessToken returned', () => pm.expect(body.data.accessToken).to.be.a('string'));",
+              "pm.collectionVariables.set('accessToken', body.data.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. List tax rates — VAT_5 is default, captures {{vat5ID}}",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates?sort=displayOrder&order=asc",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates"],
+          "query": [
+            { "key": "sort", "value": "displayOrder" },
+            { "key": "order", "value": "asc" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('seed includes VAT_5, EXEMPT, VAT_10, GCC_5', () => {",
+              "  const codes = body.data.map(r => r.code);",
+              "  ['VAT_5','EXEMPT','VAT_10','GCC_5'].forEach(c => pm.expect(codes).to.include(c));",
+              "});",
+              "const vat5 = body.data.find(r => r.code === 'VAT_5');",
+              "pm.test('VAT_5 is default', () => pm.expect(vat5.isDefault).to.be.true);",
+              "pm.test('VAT_5 rate=5.00', () => pm.expect(vat5.rate).to.eql('5.00'));",
+              "pm.test('VAT_5 type=PERCENTAGE', () => pm.expect(vat5.type).to.eql('PERCENTAGE'));",
+              "pm.collectionVariables.set('vat5ID', vat5.taxRateID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. List with isDefault=true → returns only VAT_5",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates?isDefault=true",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates"],
+          "query": [{ "key": "isDefault", "value": "true" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('exactly one default', () => pm.expect(body.data.length).to.eql(1));",
+              "pm.test('default code = VAT_5', () => pm.expect(body.data[0].code).to.eql('VAT_5'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. DELETE default tax rate → 409",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates/{{vat5ID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates", "{{vat5ID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "pm.test('error mentions default', () => {",
+              "  pm.expect(pm.response.json().message.toLowerCase()).to.include('default');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Deactivate default → 409",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"UAE Standard VAT 5%\",\n  \"rate\": 5,\n  \"displayOrder\": 1,\n  \"isActive\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates/{{vat5ID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates", "{{vat5ID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "pm.test('error mentions deactivated', () => {",
+              "  pm.expect(pm.response.json().message.toLowerCase()).to.include('deactivat');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Create CST_12 (12%) → 201, captures {{cst12ID}}",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"CST_12\",\n  \"name\": \"Custom Sales Tax 12%\",\n  \"rate\": 12,\n  \"description\": \"Smoke-test rate added by Postman.\",\n  \"displayOrder\": 50\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('CST_12 not default', () => pm.expect(body.data.isDefault).to.be.false);",
+              "pm.test('rate stored as 12.00', () => pm.expect(body.data.rate).to.eql('12.00'));",
+              "pm.test('type defaults to PERCENTAGE', () => pm.expect(body.data.type).to.eql('PERCENTAGE'));",
+              "pm.collectionVariables.set('cst12ID', body.data.taxRateID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Duplicate code (CST_12 again, lowercase) → 409",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"cst_12\",\n  \"name\": \"Dup test\",\n  \"rate\": 1,\n  \"displayOrder\": 99\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "pm.test('error mentions exists', () => {",
+              "  pm.expect(pm.response.json().message.toLowerCase()).to.include('exists');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Update — try to set isDefault via PUT → 422",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Custom Sales Tax 12%\",\n  \"rate\": 12,\n  \"displayOrder\": 50,\n  \"isActive\": true,\n  \"isDefault\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates/{{cst12ID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates", "{{cst12ID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Validation Error', () => pm.response.to.have.status(422));",
+              "pm.test('error mentions unrecognized key isDefault', () => {",
+              "  pm.expect(JSON.stringify(pm.response.json()).toLowerCase()).to.include('isdefault');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Set CST_12 as default → 200, syncs settings",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates/{{cst12ID}}/set-default",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates", "{{cst12ID}}", "set-default"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('CST_12 is now default', () => pm.expect(body.data.isDefault).to.be.true);",
+              "pm.test('message mentions default', () => pm.expect(body.message.toLowerCase()).to.include('default'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Verify VAT_5 no longer default",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates/{{vat5ID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates", "{{vat5ID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('VAT_5 isDefault=false', () => pm.expect(pm.response.json().data.isDefault).to.be.false);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Settings — default_tax_rate_code = CST_12 (cache synced)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/settings/category/workflow",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "category", "workflow"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const row = body.data.find(r => r.settingKey === 'default_tax_rate_code');",
+              "pm.test('default_tax_rate_code row exists', () => pm.expect(row).to.not.be.undefined);",
+              "pm.test('value synced to CST_12', () => pm.expect(row.value).to.eql('CST_12'));",
+              "pm.test('isPublic=false (admin only)', () => pm.expect(row.isPublic).to.be.false);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Settings — bank rows present in tenant category",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/settings/category/tenant",
+          "host": ["{{baseUrl}}"],
+          "path": ["settings", "category", "tenant"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const keys = body.data.map(r => r.settingKey);",
+              "['bank_name','bank_branch','bank_account_number','bank_iban'].forEach(k => {",
+              "  pm.test(k + ' present', () => pm.expect(keys).to.include(k));",
+              "  const row = body.data.find(r => r.settingKey === k);",
+              "  pm.test(k + ' isPublic=false', () => pm.expect(row.isPublic).to.be.false);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Customer create with TRN → trn saved",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Tax Smoke Co\",\n  \"contactEmail\": \"taxsmoke@example.com\",\n  \"trn\": \"100366457800003\",\n  \"paymentTermsDays\": 30\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers",
+          "host": ["{{baseUrl}}"],
+          "path": ["customers"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('trn round-trips', () => pm.expect(body.data.trn).to.eql('100366457800003'));",
+              "pm.collectionVariables.set('trnCustomerID', body.data.customerID);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Customer GET → trn field present",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{trnCustomerID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["customers", "{{trnCustomerID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('GET shows trn', () => pm.expect(pm.response.json().data.trn).to.eql('100366457800003'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Customer create with bad TRN (spaces) → 422",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Bad TRN Co\",\n  \"trn\": \"100 366 4578\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/customers",
+          "host": ["{{baseUrl}}"],
+          "path": ["customers"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('422 Validation Error', () => pm.response.to.have.status(422));",
+              "pm.test('error mentions alphanumeric', () => {",
+              "  pm.expect(JSON.stringify(pm.response.json()).toLowerCase()).to.include('alphanumeric');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. Cleanup — restore VAT_5 as default",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates/{{vat5ID}}/set-default",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates", "{{vat5ID}}", "set-default"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('VAT_5 default again', () => pm.expect(pm.response.json().data.isDefault).to.be.true);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16. Cleanup — delete CST_12",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/tax-rates/{{cst12ID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tax-rates", "{{cst12ID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17. Cleanup — delete test customer",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/customers/{{trnCustomerID}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["customers", "{{trnCustomerID}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

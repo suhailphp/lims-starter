@@ -18,6 +18,7 @@ import { SourcesPage } from '@/pages/SourcesPage'
 import { EquipmentPage } from '@/pages/EquipmentPage'
 import { OcmElementsPage } from '@/pages/OcmElementsPage'
 import { CurrenciesPage } from '@/pages/CurrenciesPage'
+import { TaxRatesPage } from '@/pages/TaxRatesPage'
 import { UsersPage } from '@/pages/UsersPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="/equipment"     element={<EquipmentPage />} />
           <Route path="/ocm-elements"  element={<OcmElementsPage />} />
           <Route path="/currencies"    element={<CurrenciesPage />} />
+          <Route path="/tax-rates"     element={<TaxRatesPage />} />
           <Route path="/users"         element={<UsersPage />} />
           <Route path="/profile"       element={<ProfilePage />} />
           <Route path="/notifications" element={<NotificationsPage />} />

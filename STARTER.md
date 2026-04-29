@@ -7,8 +7,9 @@ A one-page reference for using this template on a new project.
 A working LIMS (Laboratory Information Management System) extracted as a
 starter. It keeps real, shipped code as **working examples** of common
 SaaS patterns — auth, RBAC, settings, attachments, audit logging,
-notifications, multi-currency, global search, and a master-data CRUD
-template — so a new project can clone and start on day one.
+notifications, multi-currency, tax rates, global search, and a
+master-data CRUD template — so a new project can clone and start on day
+one.
 
 This is the opposite of a clean-slate boilerplate. The plumbing is
 already wired against working modules. You delete or rename what doesn't
@@ -25,25 +26,28 @@ match your domain, then build new modules using the locked patterns.
 - Notifications — two-table, scope-based (PERSONAL / CUSTOMER / LAB),
   bell + dropdown + `/notifications` page
 - Settings — key/value store, 4 categories, public unauth endpoint, in-
-  memory cache, lab logo upload
+  memory cache, lab logo upload, bank details, default tax-rate
 - Currency — multi-currency master + open-ended rate history + atomic
   Set-Base + snapshot pattern
-- Search — global search across 8 entities + ⌘K + `/search` page +
+- Tax Rates — master data + per-quote selection + atomic Set-Default +
+  Customer TRN
+- Search — global search across seeded entities + ⌘K + `/search` page +
   `?view=` deep-link contract
 - Dashboard — admin overview, chart.js donuts, equipment alerts, recent
   activity
 - Attachments — DB-base64, transactional replace, `<Avatar>` +
   `<AttachmentUpload>` components
 
-**Master-data CRUD template (10 example pages)**
+**Master-data CRUD template (10 example pages + Tax Rates)**
 Customer, SourceTypes, Sources, Categories, Equipment, OcmElements,
 Specifications, Units, Tests, Methods — each built from the same locked
 template (FilterMenu, Activate/Deactivate, View/Add/Edit/Delete modals,
 URL-driven state, skeleton loading, keyboard accessibility, dark mode).
+Tax Rates follows the same pattern with an additional Set-Default flow.
 
 ## What To Customize
 
-The 10 master-data modules are LIMS examples. For your domain:
+The 10 LIMS master-data modules are examples. For your domain:
 
 - **Replace** — delete a module (e.g. `OcmElement`) and scaffold your
   own using the locked pattern. Copy `Customer` as the starting point.
@@ -64,6 +68,7 @@ Tenant branding lives in `Settings`, not in code:
 - `tenant.lab_name` — header + reports
 - `tenant.lab_short_name` — sidebar + tab title
 - `tenant.lab_logo_attachment_id` — logo (uploaded via UI)
+- `tenant.bank_*` — quote/invoice footer
 
 Update the seeded defaults in
 `backend/src/migrations/20260428400001-seed-initial-settings.js` before
@@ -79,6 +84,7 @@ These are universal SaaS plumbing — don't rebuild them:
 - Notifications service + frontend bell/page
 - Settings store + tenant branding pipeline
 - Currency module (if your app has prices)
+- Tax Rates module (if your app charges tax)
 - Global Search infrastructure (drop entities you don't have)
 - Dashboard scaffold (replace widgets, keep the shell)
 - Attachments table + components

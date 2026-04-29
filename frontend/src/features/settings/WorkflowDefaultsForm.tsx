@@ -5,13 +5,15 @@
  * isEditable=false on the backend (sample_serial_format,
  * report_number_format) — those render with a "System" badge and a
  * disabled input, mirroring the spec. */
-import { useEffect, useState } from 'react'
-import { IconBadge, IconReceipt } from '@tabler/icons-react'
+import { useEffect, useMemo, useState } from 'react'
+import { IconBadge, IconReceipt, IconReceiptTax } from '@tabler/icons-react'
 import { toast } from '@/lib/toast'
 import {
   useBulkUpdateSettings,
   useSettingsByCategory,
 } from '@/features/settings/queries'
+import { useTaxRates } from '@/features/taxRates/taxRatesQueries'
+import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
 import {
   FieldShell,
   SectionFormFrame,
@@ -25,6 +27,7 @@ const KEYS = [
   'sample_serial_format',
   'report_number_format',
   'default_quote_validity_days',
+  'default_tax_rate_code',
 ] as const
 
 type FormState = Record<(typeof KEYS)[number], string>
@@ -43,6 +46,21 @@ function findRow(rows: Setting[], key: string): Setting | undefined {
 export function WorkflowDefaultsForm() {
   const { data: rows = [], isLoading } = useSettingsByCategory('workflow')
   const bulkMutation = useBulkUpdateSettings()
+  const { data: taxRatesData, isLoading: taxRatesLoading } = useTaxRates({
+    page: 1,
+    limit: 100,
+    isActive: true,
+    sort: 'displayOrder',
+    order: 'asc',
+  })
+  const taxRateOptions = useMemo<FKOption[]>(
+    () =>
+      (taxRatesData?.data ?? []).map((tr) => ({
+        value: tr.code,
+        label: `${tr.name} (${trimTrailingZeros(tr.rate)}%)`,
+      })),
+    [taxRatesData],
+  )
 
   const [form, setForm] = useState<FormState | null>(null)
   const [original, setOriginal] = useState<FormState | null>(null)
@@ -135,12 +153,35 @@ export function WorkflowDefaultsForm() {
         </div>
       </Subsection>
 
-      <Subsection title="Reports & Quotes" Icon={IconReceipt} last>
+      <Subsection title="Reports & Quotes" Icon={IconReceipt}>
         <div className="grid md:grid-cols-2 gap-4">
           {renderField('report_number_format')}
           {renderField('default_quote_validity_days')}
         </div>
       </Subsection>
+
+      <Subsection title="Tax" Icon={IconReceiptTax} last>
+        <div className="grid md:grid-cols-2 gap-4">
+          <FieldShell
+            label="Default Tax Rate"
+            hint="Default tax applied to new quotes and invoices."
+          >
+            <FKSelect
+              inputId="default-tax-rate-code"
+              options={taxRateOptions}
+              value={form.default_tax_rate_code}
+              onChange={(v) => setField('default_tax_rate_code', v ?? '')}
+              isLoading={taxRatesLoading}
+              placeholder={taxRatesLoading ? 'Loading…' : 'Select tax rate…'}
+            />
+          </FieldShell>
+        </div>
+      </Subsection>
     </SectionFormFrame>
   )
+}
+
+function trimTrailingZeros(s: string): string {
+  if (!s.includes('.')) return s
+  return s.replace(/\.?0+$/, '')
 }

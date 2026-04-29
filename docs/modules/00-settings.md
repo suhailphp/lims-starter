@@ -102,6 +102,8 @@ that runs after multer has parsed the file.
 | `sample_serial_format` | Sample Intake module. |
 | `report_number_format` | Reports module. |
 | `default_quote_validity_days` | Quotes module. |
+| `default_tax_rate_code` | Quotes / Invoices form pre-selection. Synced atomically by `PUT /api/tax-rates/:id/set-default`. |
+| `bank_name`, `bank_branch`, `bank_account_number`, `bank_iban` | Invoice / Quote PDF footer. All `isPublic=false` (admin-only read). |
 
 The forms render these with no special UI; admins can edit values that
 are editable. `sample_serial_format` and `report_number_format` are

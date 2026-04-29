@@ -7,6 +7,7 @@ export interface Customer {
   contactName: string | null
   contactEmail: string | null
   contactPhone: string | null
+  trn: string | null
   paymentTermsDays: number
   isActive: boolean
   isDeleted: boolean
@@ -24,6 +25,7 @@ export interface CustomerInput {
   contactName: string | null
   contactEmail: string | null
   contactPhone: string | null
+  trn: string | null
   paymentTermsDays?: number
   isActive?: boolean
 }
