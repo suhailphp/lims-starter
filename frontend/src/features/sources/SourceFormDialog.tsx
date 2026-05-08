@@ -17,7 +17,9 @@ import {
   FormField,
   inputClass,
 } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   sourceFormSchema,
   type SourceFormValues,
@@ -170,7 +172,7 @@ export function SourceFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('SourceFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -210,6 +212,7 @@ export function SourceFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
       <form id="source-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="source-customerID"
               label="Customer"
@@ -226,7 +229,7 @@ export function SourceFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
                     inputId="source-customerID"
                     options={customerOptions}
                     value={field.value}
-                    onChange={(v) => field.onChange(v ?? '')}
+                    onChange={(v) => field.onChange(v || '')}
                     onBlur={field.onBlur}
                     isLoading={customersQ.isLoading}
                     isDisabled={isEdit}
@@ -253,7 +256,7 @@ export function SourceFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
                     inputId="source-sourceTypeID"
                     options={sourceTypeOptions}
                     value={field.value}
-                    onChange={(v) => field.onChange(v ?? '')}
+                    onChange={(v) => field.onChange(v || '')}
                     onBlur={field.onBlur}
                     isLoading={sourceTypesQ.isLoading}
                     placeholder="Select source type..."
@@ -279,7 +282,7 @@ export function SourceFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
                     inputId="source-categoryID"
                     options={categoryOptions}
                     value={field.value}
-                    onChange={(v) => field.onChange(v ?? '')}
+                    onChange={(v) => field.onChange(v || '')}
                     onBlur={field.onBlur}
                     isLoading={categoriesQ.isLoading}
                     placeholder="Select category..."

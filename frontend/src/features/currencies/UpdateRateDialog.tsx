@@ -6,7 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass, textareaClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { DateTimePicker } from '@/components/ui/DateTimePicker'
+import { createInvalidHandler } from '@/utils/formErrors'
 import { exchangeRateFormSchema, type ExchangeRateFormValues } from './currencySchema'
 import { useCreateExchangeRate } from './currenciesQueries'
 import { toast } from '@/lib/toast'
@@ -65,7 +67,7 @@ export function UpdateRateDialog({ currency, onClose }: Props) {
     } catch (err) {
       mapErr(err, setError)
     }
-  })
+  }, createInvalidHandler('UpdateRateDialog', setError))
 
   return (
     <Dialog
@@ -99,6 +101,7 @@ export function UpdateRateDialog({ currency, onClose }: Props) {
       <form id="currency-rate-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="current-rate"
               label="Current Rate"

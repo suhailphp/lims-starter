@@ -7,6 +7,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   sourceTypeFormSchema,
   type SourceTypeFormValues,
@@ -86,7 +88,7 @@ export function SourceTypeFormDialog({ open, onOpenChange, mode, onSuccess }: Pr
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('SourceTypeFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -126,6 +128,7 @@ export function SourceTypeFormDialog({ open, onOpenChange, mode, onSuccess }: Pr
       <form id="source-type-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="source-type-name"
               label="Name"

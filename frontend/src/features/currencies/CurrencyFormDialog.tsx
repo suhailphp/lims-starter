@@ -10,8 +10,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { EnumSelect } from '@/components/ui/EnumSelect'
 import { DateTimePicker } from '@/components/ui/DateTimePicker'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   currencyCreateFormSchema,
   currencyUpdateFormSchema,
@@ -142,7 +144,7 @@ function CreateDialog({
       // generic helper stays usable from both create + edit forms.
       mapBackendErrors(err, setError as unknown as MapErrorSetter)
     }
-  })
+  }, createInvalidHandler('CurrencyFormDialog.Create', setError))
 
   const submitLabel = isSubmitting ? 'Saving...' : 'Add Currency'
 
@@ -178,6 +180,7 @@ function CreateDialog({
       <form id="currency-create-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="currency-code"
               label="Code"
@@ -382,7 +385,7 @@ function EditDialog({
     } catch (err) {
       mapBackendErrors(err, setError as unknown as MapErrorSetter)
     }
-  })
+  }, createInvalidHandler('CurrencyFormDialog.Edit', setError))
 
   return (
     <Dialog
@@ -416,6 +419,7 @@ function EditDialog({
       <form id="currency-edit-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="currency-edit-code"
               label="Code"

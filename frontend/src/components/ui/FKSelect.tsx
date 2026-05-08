@@ -10,7 +10,7 @@
  *   <FKSelect
  *     options={[{ value: 'id1', label: 'Acme' }]}
  *     value="id1"
- *     onChange={(v) => setValue('customerID', v ?? '')}
+ *     onChange={(v) => setValue('customerID', v || '')}
  *     hasError={!!errors.customerID}
  *     placeholder="Select customer..."
  *     isClearable

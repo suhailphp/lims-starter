@@ -9,6 +9,7 @@ import axios from 'axios'
 import { Logo } from '@/components/Logo'
 import { useTenantSettings } from '@/contexts/SettingsContext'
 import { useLogin } from '@/features/auth/useLogin'
+import { summarizeFormErrors } from '@/utils/formErrors'
 import type { LoginRequest } from '@/types/auth'
 
 const schema = z.object({
@@ -162,7 +163,14 @@ export function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+          <form
+            onSubmit={handleSubmit(onSubmit, (errs) => {
+              console.warn('[LoginPage] Validation failed', errs)
+              setApiError(summarizeFormErrors(errs))
+            })}
+            noValidate
+            className="flex flex-col gap-4"
+          >
             {/* Email */}
             <div className="relative">
               <input

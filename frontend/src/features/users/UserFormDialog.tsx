@@ -14,6 +14,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { createInvalidHandler } from '@/utils/formErrors'
 import { EnumSelect, type EnumOption } from '@/components/ui/EnumSelect'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
 import { AttachmentUpload } from '@/components/ui/AttachmentUpload'
@@ -226,7 +227,7 @@ export function UserFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('UserFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -366,7 +367,7 @@ export function UserFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
                     inputId="user-role"
                     options={ROLE_OPTIONS}
                     value={field.value}
-                    onChange={(v) => field.onChange(v ?? '')}
+                    onChange={(v) => field.onChange(v || '')}
                     onBlur={field.onBlur}
                     hasError={!!errors.role}
                     ariaLabel="Role"
@@ -392,7 +393,7 @@ export function UserFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
                       inputId="user-customerID"
                       options={customerOptions}
                       value={field.value ?? ''}
-                      onChange={(v) => field.onChange(v ?? null)}
+                      onChange={(v) => field.onChange(v || null)}
                       onBlur={field.onBlur}
                       isLoading={customersQ.isLoading}
                       placeholder="Select customer..."

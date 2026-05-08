@@ -12,7 +12,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass, textareaClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   methodFormSchema,
   type MethodFormValues,
@@ -127,7 +129,7 @@ export function MethodFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('MethodFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -167,6 +169,7 @@ export function MethodFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
       <form id="method-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="method-testID"
               label="Test"
@@ -183,7 +186,7 @@ export function MethodFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
                     inputId="method-testID"
                     options={testOptions}
                     value={field.value}
-                    onChange={(v) => field.onChange(v ?? '')}
+                    onChange={(v) => field.onChange(v || '')}
                     onBlur={field.onBlur}
                     isLoading={testsQ.isLoading}
                     isDisabled={isEdit}

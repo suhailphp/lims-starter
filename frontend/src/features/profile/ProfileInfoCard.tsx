@@ -13,6 +13,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from 'react-router-dom'
 import { IconPencil } from '@tabler/icons-react'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
+import { createInvalidHandler } from '@/utils/formErrors'
 import { profileFormSchema, type ProfileFormValues } from './profileSchema'
 import type { User } from '@/types/auth'
 
@@ -38,6 +40,7 @@ export function ProfileInfoCard({
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors },
   } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -50,7 +53,10 @@ export function ProfileInfoCard({
     if (isEditing) reset({ firstName: user.firstName, lastName: user.lastName })
   }, [isEditing, user.firstName, user.lastName, reset])
 
-  const submit = handleSubmit((values) => onSave(values))
+  const submit = handleSubmit(
+    (values) => onSave(values),
+    createInvalidHandler('ProfileInfoCard', setError),
+  )
 
   return (
     <div className="bg-white border border-border-color rounded-lg p-5 mb-6 shadow flex-1">
@@ -78,6 +84,11 @@ export function ProfileInfoCard({
           {/* Personal Information */}
           <div className="mb-5 pb-5 border-b border-border-color">
             <h4 className="text-base font-bold text-dark mb-4">Personal Information</h4>
+            {isEditing && errors.root?.message && (
+              <div className="mb-3">
+                <FormErrorBanner error={errors.root} className="" />
+              </div>
+            )}
             {isEditing ? (
               <div className="grid sm:grid-cols-2 gap-4">
                 <FormField

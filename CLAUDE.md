@@ -136,6 +136,28 @@ Reference: `/docs/decisions/ADR-frontend-theme-integration.md`
 - Submit button disables while validating and during the API call.
 - Map backend errors (409 duplicate, 422 validation) to field-level or banner messages.
 - **Dedicated pages only for**: user profile (My Account), settings, multi-step wizards, complex layouts (uploads + previews). Everything else → modal.
+- **`handleSubmit` MUST have an `onInvalid` callback (LOCKED 2026-05-08).**
+  Bare `handleSubmit(onSuccess)` silently no-ops on validation failure —
+  the user sees a dead Save button. Always wire the shared utility:
+  ```ts
+  import { createInvalidHandler } from '@/utils/formErrors'
+  const onSubmit = handleSubmit(
+    async (values) => { /* save */ },
+    createInvalidHandler('YourFormName', setError),
+  )
+  ```
+  Render `<FormErrorBanner error={errors.root} />` at the top of the form
+  body. Pages that already display errors via local state should pipe
+  `summarizeFormErrors(errs)` into the same setter (see LoginPage,
+  ChangePasswordPage, UserResetPasswordDialog).
+- **FKSelect / EnumSelect onChange uses `||` not `??` (LOCKED 2026-05-08).**
+  `onChange={(v) => field.onChange(v || '')}` for string fields with
+  empty-string sentinel; `onChange={(v) => field.onChange(v || null)}`
+  for nullable fields. Same for payload coercion before the API call:
+  `defaultUnitID: data.defaultUnitID || null`. Never use `?? ''` /
+  `?? null` — `??` lets falsy ghost values leak through to Zod and
+  causes silent submit failures.
+- See `/docs/patterns/form-pattern.md` for the full rules + reasoning.
 
 ## View Pattern Rule
 - **Click a record's name in any list table → opens a View modal** (read-only).

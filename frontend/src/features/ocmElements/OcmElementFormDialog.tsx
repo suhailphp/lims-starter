@@ -11,6 +11,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   ocmElementFormSchema,
   type OcmElementFormValues,
@@ -120,7 +122,7 @@ export function OcmElementFormDialog({ open, onOpenChange, mode, onSuccess }: Pr
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('OcmElementFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -159,6 +161,11 @@ export function OcmElementFormDialog({ open, onOpenChange, mode, onSuccess }: Pr
     >
       <form id="ocm-element-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
+          {errors.root?.message && (
+            <div className="mb-4">
+              <FormErrorBanner error={errors.root} className="" />
+            </div>
+          )}
           {/* Basic info */}
           <SectionHeading>Basic info</SectionHeading>
           <div className="grid md:grid-cols-12 gap-4 mb-5">

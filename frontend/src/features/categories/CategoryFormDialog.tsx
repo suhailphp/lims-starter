@@ -8,7 +8,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { EnumSelect, type EnumOption } from '@/components/ui/EnumSelect'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   categoryFormSchema,
   type CategoryFormValues,
@@ -98,7 +100,7 @@ export function CategoryFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('CategoryFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -138,6 +140,7 @@ export function CategoryFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
       <form id="category-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="category-name"
               label="Name"
@@ -168,7 +171,7 @@ export function CategoryFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
                     inputId="category-type"
                     options={typeOptions}
                     value={field.value}
-                    onChange={(v) => field.onChange(v ?? '')}
+                    onChange={(v) => field.onChange(v || '')}
                     onBlur={field.onBlur}
                     placeholder="Select type..."
                     hasError={!!errors.type}

@@ -9,8 +9,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
 import { EnumSelect } from '@/components/ui/EnumSelect'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   testFormSchema,
   RESULT_TYPES,
@@ -128,7 +130,7 @@ export function TestFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('TestFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -168,6 +170,7 @@ export function TestFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
       <form id="test-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="test-categoryID"
               label="Category"
@@ -184,7 +187,7 @@ export function TestFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
                     inputId="test-categoryID"
                     options={categoryOptions}
                     value={field.value}
-                    onChange={(v) => field.onChange(v ?? '')}
+                    onChange={(v) => field.onChange(v || '')}
                     onBlur={field.onBlur}
                     isLoading={categoriesQ.isLoading}
                     isDisabled={isEdit}
@@ -226,7 +229,7 @@ export function TestFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
                     inputId="test-resultType"
                     options={RESULT_TYPE_OPTIONS}
                     value={field.value}
-                    onChange={(v) => field.onChange(v ?? 'NUMERIC')}
+                    onChange={(v) => field.onChange(v || 'NUMERIC')}
                     onBlur={field.onBlur}
                     placeholder="Select type..."
                     hasError={!!errors.resultType}

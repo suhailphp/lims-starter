@@ -20,6 +20,7 @@ import axios from 'axios'
 import { IconCheck, IconCopy, IconEye, IconEyeOff } from '@tabler/icons-react'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { summarizeFormErrors } from '@/utils/formErrors'
 import {
   resetPasswordFormSchema,
   type ResetPasswordFormValues,
@@ -70,19 +71,26 @@ export function UserResetPasswordDialog({ user, onClose }: Props) {
     setCopied(false)
   }, [user, resetForm])
 
-  const onSubmit = handleSubmit(async (values) => {
-    if (!user) return
-    setBannerError(null)
-    try {
-      const result = await reset.mutateAsync({
-        userID: user.userID,
-        input: isTyped ? { newPassword: values.newPassword } : {},
-      })
-      setTempPassword(result.tempPassword)
-    } catch (err) {
-      setBannerError(formatErr(err))
-    }
-  })
+  const onSubmit = handleSubmit(
+    async (values) => {
+      if (!user) return
+      setBannerError(null)
+      try {
+        const result = await reset.mutateAsync({
+          userID: user.userID,
+          input: isTyped ? { newPassword: values.newPassword } : {},
+        })
+        setTempPassword(result.tempPassword)
+      } catch (err) {
+        setBannerError(formatErr(err))
+      }
+    },
+    (errs) => {
+      // Validation failure — surface in the same banner the API errors use.
+      console.warn('[UserResetPasswordDialog] Validation failed', errs)
+      setBannerError(summarizeFormErrors(errs))
+    },
+  )
 
   const handleCopy = async () => {
     if (!tempPassword) return

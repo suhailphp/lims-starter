@@ -13,6 +13,7 @@ import { clearCredentials } from '@/features/auth/authSlice'
 import { changePasswordApi } from '@/api/auth'
 import { STORAGE_KEYS } from '@/lib/storageKeys'
 import { Logo } from '@/components/Logo'
+import { summarizeFormErrors } from '@/utils/formErrors'
 
 const schema = z
   .object({
@@ -46,6 +47,7 @@ export function ChangePasswordPage() {
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const {
     register,
@@ -67,7 +69,10 @@ export function ChangePasswordPage() {
     },
   })
 
-  const onSubmit = (data: FormValues) => mutation.mutate(data)
+  const onSubmit = (data: FormValues) => {
+    setValidationError(null)
+    mutation.mutate(data)
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-light p-6">
@@ -88,13 +93,20 @@ export function ChangePasswordPage() {
             )}
           </div>
 
-          {mutation.isError && (
+          {(mutation.isError || validationError) && (
             <div className="mb-4 rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700">
-              {formatApiError(mutation.error)}
+              {validationError ?? formatApiError(mutation.error)}
             </div>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+          <form
+            onSubmit={handleSubmit(onSubmit, (errs) => {
+              console.warn('[ChangePasswordPage] Validation failed', errs)
+              setValidationError(summarizeFormErrors(errs))
+            })}
+            noValidate
+            className="flex flex-col gap-4"
+          >
             <PasswordField
               id="currentPassword"
               label="Current password"

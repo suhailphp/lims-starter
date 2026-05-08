@@ -8,6 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   specificationFormSchema,
   type SpecificationFormValues,
@@ -87,7 +89,7 @@ export function SpecificationFormDialog({ open, onOpenChange, mode, onSuccess }:
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('SpecificationFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -127,6 +129,7 @@ export function SpecificationFormDialog({ open, onOpenChange, mode, onSuccess }:
       <form id="specification-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="specification-name"
               label="Name"

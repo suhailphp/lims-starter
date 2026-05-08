@@ -8,7 +8,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   unitFormSchema,
   type UnitFormValues,
@@ -116,7 +118,7 @@ export function UnitFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('UnitFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -156,6 +158,7 @@ export function UnitFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
       <form id="unit-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="unit-categoryID"
               label="Category"
@@ -172,7 +175,7 @@ export function UnitFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
                     inputId="unit-categoryID"
                     options={categoryOptions}
                     value={field.value}
-                    onChange={(v) => field.onChange(v ?? '')}
+                    onChange={(v) => field.onChange(v || '')}
                     onBlur={field.onBlur}
                     isLoading={categoriesQ.isLoading}
                     isDisabled={isEdit}

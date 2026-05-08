@@ -170,7 +170,7 @@ export function WorkflowDefaultsForm() {
               inputId="default-tax-rate-code"
               options={taxRateOptions}
               value={form.default_tax_rate_code}
-              onChange={(v) => setField('default_tax_rate_code', v ?? '')}
+              onChange={(v) => setField('default_tax_rate_code', v || '')}
               isLoading={taxRatesLoading}
               placeholder={taxRatesLoading ? 'Loading…' : 'Select tax rate…'}
             />

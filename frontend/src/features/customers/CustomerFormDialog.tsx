@@ -16,6 +16,8 @@ import {
   inputClass,
   textareaClass,
 } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   customerFormSchema,
   type CustomerFormValues,
@@ -117,7 +119,7 @@ export function CustomerFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
     } catch (err) {
       mapBackendErrors(err, setError)
     }
-  })
+  }, createInvalidHandler('CustomerFormDialog', setError))
 
   const submitLabel = isSubmitting
     ? 'Saving...'
@@ -160,6 +162,7 @@ export function CustomerFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
         <fieldset disabled={isSubmitting} className="contents">
         {/* Vendor grid — userModal.tsx:30 */}
         <div className="grid md:grid-cols-12 gap-4">
+          <FormErrorBanner error={errors.root} />
           <FormField
             id="customer-name"
             label="Customer Name"

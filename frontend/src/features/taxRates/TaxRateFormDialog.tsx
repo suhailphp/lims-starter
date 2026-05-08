@@ -9,6 +9,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass, textareaClass } from '@/components/ui/FormField'
+import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
+import { createInvalidHandler } from '@/utils/formErrors'
 import {
   taxRateCreateFormSchema,
   taxRateUpdateFormSchema,
@@ -118,7 +120,7 @@ function CreateDialog({
     } catch (err) {
       mapBackendErrors(err, setError as unknown as MapErrorSetter)
     }
-  })
+  }, createInvalidHandler('TaxRateFormDialog.Create', setError))
 
   return (
     <Dialog
@@ -152,6 +154,7 @@ function CreateDialog({
       <form id="tax-rate-create-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="tax-rate-code"
               label="Code"
@@ -299,7 +302,7 @@ function EditDialog({
     } catch (err) {
       mapBackendErrors(err, setError as unknown as MapErrorSetter)
     }
-  })
+  }, createInvalidHandler('TaxRateFormDialog.Edit', setError))
 
   return (
     <Dialog
@@ -333,6 +336,7 @@ function EditDialog({
       <form id="tax-rate-edit-form" onSubmit={onSubmit} noValidate>
         <fieldset disabled={isSubmitting} className="contents">
           <div className="grid md:grid-cols-12 gap-4">
+            <FormErrorBanner error={errors.root} />
             <FormField
               id="tax-rate-edit-code"
               label="Code"
