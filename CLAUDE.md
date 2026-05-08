@@ -1100,10 +1100,16 @@ References:
 - `components/ui/DateTimePicker.tsx` / `TimePicker.tsx`.
 - `components/ui/FilterMenu.tsx` — single filter pattern for list pages.
 - `components/ui/PageHeader.tsx` — breadcrumbs + actions slot.
+- `components/ui/FormErrorBanner.tsx` — RHF `errors.root` banner; pair with
+  `createInvalidHandler` (mandatory for every form, see Form Pattern Rule).
 - `components/ui/AttachmentUpload.tsx` / `Avatar.tsx`.
+- `utils/formErrors.ts` — `summarizeFormErrors` + `createInvalidHandler`.
+  MUST wire into every `handleSubmit(...)` call (Form Pattern Rule).
 
 **Pattern docs**:
 - `/docs/patterns/master-data-page.md` — locked template for list pages.
+- `/docs/patterns/form-pattern.md` — onInvalid + FKSelect `||` rules
+  (silent-submit failure prevention).
 - `/docs/decisions/` — every architectural decision (read before
   proposing changes that touch any locked area).
 

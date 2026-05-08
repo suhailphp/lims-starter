@@ -156,6 +156,12 @@ sibling field's blur).
 - Modal stays open until response. On success: `toast.success` + close + parent
   invalidates query. On failure: `mapBackendErrors()` writes per-field or root
   errors, modal stays open.
+- **`handleSubmit` MUST have an `onInvalid` callback (LOCKED 2026-05-08).**
+  Use `createInvalidHandler('FormName', setError)` from
+  `@/utils/formErrors`. Render `<FormErrorBanner error={errors.root} />`
+  as the first child of the grid. Without these the form silently
+  no-ops on validation failure and the user sees a dead Save button.
+  See `/docs/patterns/form-pattern.md` for the full rule.
 
 ---
 
@@ -295,7 +301,7 @@ Use RHF's `<Controller>` (FKSelect is not a native input):
     <FKSelect
       options={customerOptions}
       value={field.value}
-      onChange={(v) => field.onChange(v ?? '')}
+      onChange={(v) => field.onChange(v || '')}
       onBlur={field.onBlur}
       isLoading={customersQ.isLoading}
       hasError={!!errors.customerID}
@@ -378,7 +384,7 @@ const typeOptions: EnumOption[] = useMemo(
     <EnumSelect
       options={typeOptions}
       value={field.value}
-      onChange={(v) => field.onChange(v ?? '')}
+      onChange={(v) => field.onChange(v || '')}
       onBlur={field.onBlur}
       hasError={!!errors.type}
     />
