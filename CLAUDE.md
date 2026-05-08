@@ -157,7 +157,29 @@ Reference: `/docs/decisions/ADR-frontend-theme-integration.md`
   `defaultUnitID: data.defaultUnitID || null`. Never use `?? ''` /
   `?? null` — `??` lets falsy ghost values leak through to Zod and
   causes silent submit failures.
-- See `/docs/patterns/form-pattern.md` for the full rules + reasoning.
+- **Mutation `onError` MUST surface backend errors (LOCKED 2026-05-09).**
+  Every form catch block routes the error through `handleApiError(err,
+  setError, 'FormName', { knownFields: [...], conflictField: 'name' })`.
+  Backend 422 envelopes have `errors[].field` (string), not `path[]` —
+  the shared utility handles both shapes. NEVER write a bespoke
+  `mapBackendErrors` per form; the prior per-form helpers all read
+  `detail.path?.[0]` and silently dropped per-field bindings.
+- **Form state preservation via `useFormSeed` (LOCKED 2026-05-09).**
+  Replace `useEffect(() => { if (!open) return; reset(...) }, [open,
+  mode])` with `useFormSeed({ active, id, seed })`. Naive deps fire on
+  every parent re-render with a fresh `mode` literal — including the
+  re-render after a save failure — wiping user input and the just-set
+  `errors.root` banner. The hook ref-gates `reset()` to fire only when
+  the entity identity actually changes.
+- **Nullable FK `belongsTo` MUST set `required: false` (LOCKED 2026-05-09).**
+  Sequelize INNER JOIN drops rows whose FK is null OR whose related
+  entity is filtered out by `defaultScope`. For every `include: [...]`
+  in a controller, set `required: false` when the FK is nullable OR
+  the target model has a soft-delete `defaultScope`. Already in effect
+  for User → Customer / Attachment and dashboard's UserActivity → User
+  / AuditLog → User. New modules MUST re-run the audit.
+- See `/docs/patterns/form-pattern.md` for the full five-layer locked
+  rule set + reasoning.
 
 ## View Pattern Rule
 - **Click a record's name in any list table → opens a View modal** (read-only).

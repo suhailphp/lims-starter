@@ -3,14 +3,33 @@
  * isDefault is NOT in this form — the dedicated Set-Default dialog
  * flips it via the `set-default` endpoint.
  */
-import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass, textareaClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const CREATE_KNOWN_FIELDS = [
+  'code',
+  'name',
+  'rate',
+  'description',
+  'displayOrder',
+  'isActive',
+] as const
+
+const EDIT_KNOWN_FIELDS = [
+  'name',
+  'rate',
+  'description',
+  'displayOrder',
+  'isActive',
+] as const
 import {
   taxRateCreateFormSchema,
   taxRateUpdateFormSchema,
@@ -97,10 +116,11 @@ function CreateDialog({
     defaultValues: CREATE_DEFAULTS,
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(CREATE_DEFAULTS)
-  }, [open, reset])
+  useFormSeed({
+    active: open,
+    id: null,
+    seed: () => reset(CREATE_DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: TaxRateCreateInput = {
@@ -118,7 +138,10 @@ function CreateDialog({
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError as unknown as MapErrorSetter)
+      handleApiError(err, setError, 'TaxRateFormDialog.Create', {
+        knownFields: CREATE_KNOWN_FIELDS,
+        conflictField: 'code',
+      })
     }
   }, createInvalidHandler('TaxRateFormDialog.Create', setError))
 
@@ -281,10 +304,11 @@ function EditDialog({
     defaultValues: valuesFromTaxRate(taxRate),
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(valuesFromTaxRate(taxRate))
-  }, [open, taxRate, reset])
+  useFormSeed({
+    active: open,
+    id: taxRate.taxRateID,
+    seed: () => reset(valuesFromTaxRate(taxRate)),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: TaxRateUpdateInput = {
@@ -300,7 +324,9 @@ function EditDialog({
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError as unknown as MapErrorSetter)
+      handleApiError(err, setError, 'TaxRateFormDialog.Edit', {
+        knownFields: EDIT_KNOWN_FIELDS,
+      })
     }
   }, createInvalidHandler('TaxRateFormDialog.Edit', setError))
 
@@ -437,37 +463,3 @@ function EditDialog({
 
 /* ---------- helpers ---------- */
 
-type MapErrorSetter = (
-  field: string,
-  error: { type: string; message: string },
-) => void
-
-function mapBackendErrors(err: unknown, setError: MapErrorSetter) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 409) {
-    setError('code', {
-      type: 'server',
-      message: data?.message ?? 'A tax rate with this code already exists',
-    })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as string
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

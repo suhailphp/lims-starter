@@ -8,10 +8,9 @@
  *   3. Customer is disabled in edit mode — backend PUT does not accept customerID
  *      (a source can't be moved between customers).
  */
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import {
   FormField,
@@ -19,7 +18,23 @@ import {
 } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = [
+  'customerID',
+  'sourceTypeID',
+  'categoryID',
+  'sourceName',
+  'equipmentName',
+  'componentType',
+  'model',
+  'make',
+  'isActive',
+] as const
 import {
   sourceFormSchema,
   type SourceFormValues,
@@ -125,10 +140,11 @@ export function SourceFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
     defaultValues: DEFAULTS,
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromSource(mode.source) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.source.sourceID : null,
+    seed: () => reset(isEdit ? valuesFromSource(mode.source) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -170,7 +186,9 @@ export function SourceFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'SourceFormDialog', {
+        knownFields: KNOWN_FIELDS,
+      })
     }
   }, createInvalidHandler('SourceFormDialog', setError))
 
@@ -381,40 +399,3 @@ export function SourceFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
   )
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof SourceFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  // 404 = FK target missing — report on whichever FK matches the message.
-  if (status === 404) {
-    const msg = data?.message ?? 'Related record not found'
-    if (/customer/i.test(msg)) setError('customerID', { type: 'server', message: msg })
-    else if (/sourcetype/i.test(msg)) setError('sourceTypeID', { type: 'server', message: msg })
-    else if (/category/i.test(msg)) setError('categoryID', { type: 'server', message: msg })
-    else setError('root', { type: 'server', message: msg })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof SourceFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

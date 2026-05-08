@@ -4,16 +4,38 @@
  * a base currency (i.e. the new row will NOT auto-become base). On Edit
  * the rate fields are absent — rate edits go through Update Rate dialog.
  */
-import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { EnumSelect } from '@/components/ui/EnumSelect'
 import { DateTimePicker } from '@/components/ui/DateTimePicker'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const CREATE_KNOWN_FIELDS = [
+  'code',
+  'name',
+  'symbol',
+  'decimalPlaces',
+  'displayOrder',
+  'isActive',
+  'requiresInitialRate',
+  'initialRate',
+  'initialRateEffectiveDate',
+] as const
+
+const EDIT_KNOWN_FIELDS = [
+  'name',
+  'symbol',
+  'decimalPlaces',
+  'displayOrder',
+  'isActive',
+] as const
 import {
   currencyCreateFormSchema,
   currencyUpdateFormSchema,
@@ -114,10 +136,14 @@ function CreateDialog({
     defaultValues: { ...CREATE_DEFAULTS, requiresInitialRate: hasBaseCurrency },
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset({ ...CREATE_DEFAULTS, requiresInitialRate: hasBaseCurrency })
-  }, [open, hasBaseCurrency, reset])
+  useFormSeed({
+    active: open,
+    // hasBaseCurrency feeds the seed but isn't an "entity identity" — fold
+    // it into the key so toggling it across opens reseeds.
+    id: `__new__:${hasBaseCurrency ? 'with-base' : 'first'}`,
+    seed: () =>
+      reset({ ...CREATE_DEFAULTS, requiresInitialRate: hasBaseCurrency }),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: CurrencyCreateInput = {
@@ -140,9 +166,10 @@ function CreateDialog({
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      // RHF setError takes a typed field union; cast at the call site so the
-      // generic helper stays usable from both create + edit forms.
-      mapBackendErrors(err, setError as unknown as MapErrorSetter)
+      handleApiError(err, setError, 'CurrencyFormDialog.Create', {
+        knownFields: CREATE_KNOWN_FIELDS,
+        conflictField: 'code',
+      })
     }
   }, createInvalidHandler('CurrencyFormDialog.Create', setError))
 
@@ -364,10 +391,11 @@ function EditDialog({
     defaultValues: valuesFromCurrency(currency),
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(valuesFromCurrency(currency))
-  }, [open, currency, reset])
+  useFormSeed({
+    active: open,
+    id: currency.currencyID,
+    seed: () => reset(valuesFromCurrency(currency)),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: CurrencyUpdateInput = {
@@ -383,7 +411,9 @@ function EditDialog({
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError as unknown as MapErrorSetter)
+      handleApiError(err, setError, 'CurrencyFormDialog.Edit', {
+        knownFields: EDIT_KNOWN_FIELDS,
+      })
     }
   }, createInvalidHandler('CurrencyFormDialog.Edit', setError))
 
@@ -532,37 +562,3 @@ function todayIsoDate(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-type MapErrorSetter = (
-  field: string,
-  error: { type: string; message: string },
-) => void
-
-function mapBackendErrors(err: unknown, setError: MapErrorSetter) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 409) {
-    setError('code', {
-      type: 'server',
-      message: data?.message ?? 'A currency with this code already exists',
-    })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as string
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

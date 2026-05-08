@@ -5,10 +5,8 @@
  *     - Footer: Cancel + submit (lines 140–153)
  *   Inputs catalog: vendor/src/pages/ui-elements/form-ui/formElements.tsx
  */
-import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { z } from 'zod'
 import { Dialog } from '@/components/ui/Dialog'
 import {
@@ -17,7 +15,22 @@ import {
   textareaClass,
 } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = [
+  'name',
+  'address',
+  'contactName',
+  'contactEmail',
+  'contactPhone',
+  'trn',
+  'paymentTermsDays',
+  'isActive',
+] as const
 import {
   customerFormSchema,
   type CustomerFormValues,
@@ -87,11 +100,13 @@ export function CustomerFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
     defaultValues: DEFAULTS,
   })
 
-  // Reset form whenever the dialog opens with a (different) record.
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromCustomer(mode.customer) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  // Re-seed only when the dialog opens or switches to a different record.
+  // A save failure must NOT wipe in-progress edits (see Form Pattern Rule).
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.customer.customerID : null,
+    seed: () => reset(isEdit ? valuesFromCustomer(mode.customer) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: CustomerInput = {
@@ -117,7 +132,10 @@ export function CustomerFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'CustomerFormDialog', {
+        knownFields: KNOWN_FIELDS,
+        conflictField: 'name',
+      })
     }
   }, createInvalidHandler('CustomerFormDialog', setError))
 
@@ -286,39 +304,3 @@ export function CustomerFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
   )
 }
 
-/** Map backend error envelope to react-hook-form field errors. */
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof CustomerFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 409) {
-    setError('name', {
-      type: 'server',
-      message: data?.message ?? 'A customer with this name already exists',
-    })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof CustomerFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

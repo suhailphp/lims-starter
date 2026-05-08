@@ -6,15 +6,26 @@
  * isDefault note: backend auto-flips sibling defaults off in a transaction
  * when set true — UI just sends the value and trusts the backend invariant.
  */
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass, textareaClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = [
+  'testID',
+  'code',
+  'description',
+  'isDefault',
+  'isActive',
+] as const
 import {
   methodFormSchema,
   type MethodFormValues,
@@ -87,10 +98,11 @@ export function MethodFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
     defaultValues: DEFAULTS,
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromMethod(mode.method) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.method.methodID : null,
+    seed: () => reset(isEdit ? valuesFromMethod(mode.method) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -127,7 +139,10 @@ export function MethodFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'MethodFormDialog', {
+        knownFields: KNOWN_FIELDS,
+        conflictField: 'code',
+      })
     }
   }, createInvalidHandler('MethodFormDialog', setError))
 
@@ -257,37 +272,3 @@ export function MethodFormDialog({ open, onOpenChange, mode, onSuccess }: Props)
   )
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof MethodFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 404) {
-    const msg = data?.message ?? 'Related record not found'
-    if (/test/i.test(msg)) setError('testID', { type: 'server', message: msg })
-    else setError('root', { type: 'server', message: msg })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof MethodFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

@@ -1,14 +1,18 @@
 /* DOMAIN — Source Type Add / Edit modal.
  * Pattern reference: features/customers/CustomerFormDialog.tsx (locked template).
  */
-import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = ['name', 'label', 'isActive'] as const
 import {
   sourceTypeFormSchema,
   type SourceTypeFormValues,
@@ -62,10 +66,11 @@ export function SourceTypeFormDialog({ open, onOpenChange, mode, onSuccess }: Pr
     defaultValues: DEFAULTS,
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromSourceType(mode.sourceType) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.sourceType.sourceTypeID : null,
+    seed: () => reset(isEdit ? valuesFromSourceType(mode.sourceType) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: SourceTypeInput = {
@@ -86,7 +91,10 @@ export function SourceTypeFormDialog({ open, onOpenChange, mode, onSuccess }: Pr
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'SourceTypeFormDialog', {
+        knownFields: KNOWN_FIELDS,
+        conflictField: 'name',
+      })
     }
   }, createInvalidHandler('SourceTypeFormDialog', setError))
 
@@ -176,38 +184,3 @@ export function SourceTypeFormDialog({ open, onOpenChange, mode, onSuccess }: Pr
   )
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof SourceTypeFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 409) {
-    setError('name', {
-      type: 'server',
-      message: data?.message ?? 'A source type with this name already exists',
-    })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof SourceTypeFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

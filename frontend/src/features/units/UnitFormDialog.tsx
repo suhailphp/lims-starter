@@ -2,15 +2,20 @@
  * Pattern reference: features/sources/SourceFormDialog.tsx (FK template).
  * Single FK (Category), locked in edit mode (backend PUT doesn't accept categoryID).
  */
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = ['categoryID', 'name', 'symbol', 'isActive'] as const
 import {
   unitFormSchema,
   type UnitFormValues,
@@ -81,10 +86,11 @@ export function UnitFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
     defaultValues: DEFAULTS,
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromUnit(mode.unit) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.unit.unitID : null,
+    seed: () => reset(isEdit ? valuesFromUnit(mode.unit) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -116,7 +122,9 @@ export function UnitFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'UnitFormDialog', {
+        knownFields: KNOWN_FIELDS,
+      })
     }
   }, createInvalidHandler('UnitFormDialog', setError))
 
@@ -234,37 +242,3 @@ export function UnitFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
   )
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof UnitFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 404) {
-    const msg = data?.message ?? 'Related record not found'
-    if (/category/i.test(msg)) setError('categoryID', { type: 'server', message: msg })
-    else setError('root', { type: 'server', message: msg })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof UnitFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

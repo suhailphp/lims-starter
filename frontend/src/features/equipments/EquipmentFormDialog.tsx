@@ -3,15 +3,25 @@
  * NEW: <DateTimePicker mode="date" /> for calibrationDueDate (first date field
  * in any master-data form).
  */
-import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { DateTimePicker } from '@/components/ui/DateTimePicker'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = [
+  'name',
+  'model',
+  'serialNumber',
+  'calibrationDueDate',
+  'isActive',
+] as const
 import {
   equipmentFormSchema,
   type EquipmentFormValues,
@@ -70,10 +80,11 @@ export function EquipmentFormDialog({ open, onOpenChange, mode, onSuccess }: Pro
     defaultValues: DEFAULTS,
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromEquipment(mode.equipment) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.equipment.equipmentID : null,
+    seed: () => reset(isEdit ? valuesFromEquipment(mode.equipment) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: EquipmentInput = {
@@ -96,7 +107,10 @@ export function EquipmentFormDialog({ open, onOpenChange, mode, onSuccess }: Pro
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'EquipmentFormDialog', {
+        knownFields: KNOWN_FIELDS,
+        conflictField: 'serialNumber',
+      })
     }
   }, createInvalidHandler('EquipmentFormDialog', setError))
 
@@ -224,39 +238,3 @@ export function EquipmentFormDialog({ open, onOpenChange, mode, onSuccess }: Pro
   )
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof EquipmentFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 409) {
-    // Backend's only unique field is serialNumber.
-    setError('serialNumber', {
-      type: 'server',
-      message: data?.message ?? 'Equipment with this serial number already exists',
-    })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof EquipmentFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

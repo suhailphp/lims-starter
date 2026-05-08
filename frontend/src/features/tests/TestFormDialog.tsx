@@ -3,16 +3,27 @@
  * Adds: decimalPlaces (number input) + resultType (EnumSelect, 3 values).
  * Single FK (Category), locked in edit mode (backend PUT doesn't accept categoryID).
  */
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
 import { EnumSelect } from '@/components/ui/EnumSelect'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = [
+  'categoryID',
+  'name',
+  'decimalPlaces',
+  'resultType',
+  'isActive',
+] as const
 import {
   testFormSchema,
   RESULT_TYPES,
@@ -91,10 +102,11 @@ export function TestFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
     defaultValues: DEFAULTS,
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromTest(mode.test) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.test.testID : null,
+    seed: () => reset(isEdit ? valuesFromTest(mode.test) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -128,7 +140,9 @@ export function TestFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'TestFormDialog', {
+        knownFields: KNOWN_FIELDS,
+      })
     }
   }, createInvalidHandler('TestFormDialog', setError))
 
@@ -275,37 +289,3 @@ export function TestFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
   )
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof TestFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 404) {
-    const msg = data?.message ?? 'Related record not found'
-    if (/category/i.test(msg)) setError('categoryID', { type: 'server', message: msg })
-    else setError('root', { type: 'server', message: msg })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof TestFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

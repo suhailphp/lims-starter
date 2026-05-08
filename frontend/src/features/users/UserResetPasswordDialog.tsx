@@ -13,14 +13,14 @@
  *   Body: {} → server-generated 12-char password
  *   Body: { newPassword } → admin-typed password (validated against the same rule)
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { IconCheck, IconCopy, IconEye, IconEyeOff } from '@tabler/icons-react'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
-import { summarizeFormErrors } from '@/utils/formErrors'
+import { summarizeFormErrors, useFormSeed } from '@/utils/formErrors'
 import {
   resetPasswordFormSchema,
   type ResetPasswordFormValues,
@@ -61,15 +61,19 @@ export function UserResetPasswordDialog({ user, onClose }: Props) {
   const mode = useWatch({ control, name: 'mode' })
   const isTyped = mode === 'typed'
 
-  // Reset internal state every time the dialog opens for a new user.
-  useEffect(() => {
-    if (!user) return
-    resetForm(FORM_DEFAULTS)
-    setTempPassword(null)
-    setBannerError(null)
-    setShowPassword(false)
-    setCopied(false)
-  }, [user, resetForm])
+  // Reseed only when the dialog opens for a different user. A 422 / 500
+  // re-render must NOT wipe the in-progress form or banner error.
+  useFormSeed({
+    active: !!user,
+    id: user?.userID ?? null,
+    seed: () => {
+      resetForm(FORM_DEFAULTS)
+      setTempPassword(null)
+      setBannerError(null)
+      setShowPassword(false)
+      setCopied(false)
+    },
+  })
 
   const onSubmit = handleSubmit(
     async (values) => {

@@ -7,14 +7,13 @@
  * (backend enforces SELF_ALLOWED_UPDATE_FIELDS). Other rows render as
  * read-only key/value pairs in both modes.
  */
-import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from 'react-router-dom'
 import { IconPencil } from '@tabler/icons-react'
 import { FormField, inputClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
-import { createInvalidHandler } from '@/utils/formErrors'
+import { createInvalidHandler, useFormSeed } from '@/utils/formErrors'
 import { profileFormSchema, type ProfileFormValues } from './profileSchema'
 import type { User } from '@/types/auth'
 
@@ -48,10 +47,13 @@ export function ProfileInfoCard({
     defaultValues: { firstName: user.firstName, lastName: user.lastName },
   })
 
-  // Re-prime the form when entering edit mode or when user prop changes.
-  useEffect(() => {
-    if (isEditing) reset({ firstName: user.firstName, lastName: user.lastName })
-  }, [isEditing, user.firstName, user.lastName, reset])
+  // Re-seed only when entering edit mode or switching to a different user.
+  // Save-failure re-renders keep the user's in-progress edits.
+  useFormSeed({
+    active: isEditing,
+    id: user.userID,
+    seed: () => reset({ firstName: user.firstName, lastName: user.lastName }),
+  })
 
   const submit = handleSubmit(
     (values) => onSave(values),

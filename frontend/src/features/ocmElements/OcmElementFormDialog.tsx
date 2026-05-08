@@ -5,14 +5,29 @@
  * Errors attach to the specific field that's wrong, so the user sees inline
  * messages beneath the offending input rather than a banner.
  */
-import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = [
+  'name',
+  'symbol',
+  'unit',
+  'normalRangeMin',
+  'normalRangeMax',
+  'cautionRangeMin',
+  'cautionRangeMax',
+  'criticalRangeMin',
+  'criticalRangeMax',
+  'isActive',
+] as const
 import {
   ocmElementFormSchema,
   type OcmElementFormValues,
@@ -86,10 +101,11 @@ export function OcmElementFormDialog({ open, onOpenChange, mode, onSuccess }: Pr
     defaultValues: DEFAULTS,
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromOcmElement(mode.ocmElement) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.ocmElement.ocmElementID : null,
+    seed: () => reset(isEdit ? valuesFromOcmElement(mode.ocmElement) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: OcmElementInput = {
@@ -120,7 +136,10 @@ export function OcmElementFormDialog({ open, onOpenChange, mode, onSuccess }: Pr
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'OcmElementFormDialog', {
+        knownFields: KNOWN_FIELDS,
+        conflictField: 'symbol',
+      })
     }
   }, createInvalidHandler('OcmElementFormDialog', setError))
 
@@ -329,40 +348,3 @@ function RangePair(props: {
   )
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof OcmElementFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; field?: string; message?: string }> }
-    | undefined
-
-  if (status === 409) {
-    setError('symbol', {
-      type: 'server',
-      message: data?.message ?? 'An element with this symbol already exists',
-    })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? detail.field ?? 'root') as
-        | keyof OcmElementFormValues
-        | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

@@ -1,14 +1,18 @@
 /* DOMAIN — Update Exchange Rate modal. New rate effective from a date;
  * the previous open-ended rate is auto-closed (server-side). */
-import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass, textareaClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { DateTimePicker } from '@/components/ui/DateTimePicker'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = ['rate', 'effectiveDate', 'notes'] as const
 import { exchangeRateFormSchema, type ExchangeRateFormValues } from './currencySchema'
 import { useCreateExchangeRate } from './currenciesQueries'
 import { toast } from '@/lib/toast'
@@ -39,14 +43,16 @@ export function UpdateRateDialog({ currency, onClose }: Props) {
     },
   })
 
-  useEffect(() => {
-    if (!currency) return
-    reset({
-      rate: undefined as unknown as number,
-      effectiveDate: todayIsoDate(),
-      notes: '',
-    })
-  }, [currency, reset])
+  useFormSeed({
+    active: !!currency,
+    id: currency?.currencyID ?? null,
+    seed: () =>
+      reset({
+        rate: undefined as unknown as number,
+        effectiveDate: todayIsoDate(),
+        notes: '',
+      }),
+  })
 
   if (!currency) return null
 
@@ -65,7 +71,9 @@ export function UpdateRateDialog({ currency, onClose }: Props) {
       toast.success(`Rate updated for ${currency.code}`)
       onClose()
     } catch (err) {
-      mapErr(err, setError)
+      handleApiError(err, setError, 'UpdateRateDialog', {
+        knownFields: KNOWN_FIELDS,
+      })
     }
   }, createInvalidHandler('UpdateRateDialog', setError))
 
@@ -191,24 +199,3 @@ function todayIsoDate(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-function mapErr(
-  err: unknown,
-  setError: (
-    field: 'rate' | 'effectiveDate' | 'notes' | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as { message?: string } | undefined
-  const msg = data?.message ?? 'Save failed'
-  if (status === 409) {
-    // Most 409s here mean: backdated below the open rate, or rate added to base.
-    setError('effectiveDate', { type: 'server', message: msg })
-    return
-  }
-  setError('root', { type: 'server', message: msg })
-}

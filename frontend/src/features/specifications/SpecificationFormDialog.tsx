@@ -2,14 +2,18 @@
  * Pattern reference: features/sourceTypes/SourceTypeFormDialog.tsx (locked template).
  * Simplest entity in the master-data set: just `name` + `isActive`.
  */
-import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = ['name', 'isActive'] as const
 import {
   specificationFormSchema,
   type SpecificationFormValues,
@@ -61,10 +65,12 @@ export function SpecificationFormDialog({ open, onOpenChange, mode, onSuccess }:
     defaultValues: DEFAULTS,
   })
 
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromSpecification(mode.specification) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.specification.specificationID : null,
+    seed: () =>
+      reset(isEdit ? valuesFromSpecification(mode.specification) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: SpecificationInput = {
@@ -87,7 +93,10 @@ export function SpecificationFormDialog({ open, onOpenChange, mode, onSuccess }:
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'SpecificationFormDialog', {
+        knownFields: KNOWN_FIELDS,
+        conflictField: 'name',
+      })
     }
   }, createInvalidHandler('SpecificationFormDialog', setError))
 
@@ -162,38 +171,3 @@ export function SpecificationFormDialog({ open, onOpenChange, mode, onSuccess }:
   )
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof SpecificationFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 409) {
-    setError('name', {
-      type: 'server',
-      message: data?.message ?? 'A specification with this name already exists',
-    })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof SpecificationFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

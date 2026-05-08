@@ -2,15 +2,20 @@
  * Pattern reference: features/sourceTypes/SourceTypeFormDialog.tsx (locked template).
  * Native <select> for the `type` enum (3 fixed values; FKSelect would be overkill).
  */
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
 import { FormErrorBanner } from '@/components/ui/FormErrorBanner'
 import { EnumSelect, type EnumOption } from '@/components/ui/EnumSelect'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = ['name', 'type', 'isActive'] as const
 import {
   categoryFormSchema,
   type CategoryFormValues,
@@ -74,10 +79,11 @@ export function CategoryFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
     [],
   )
 
-  useEffect(() => {
-    if (!open) return
-    reset(isEdit ? valuesFromCategory(mode.category) : DEFAULTS)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.category.categoryID : null,
+    seed: () => reset(isEdit ? valuesFromCategory(mode.category) : DEFAULTS),
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     const input: CategoryInput = {
@@ -98,7 +104,10 @@ export function CategoryFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'CategoryFormDialog', {
+        knownFields: KNOWN_FIELDS,
+        conflictField: 'name',
+      })
     }
   }, createInvalidHandler('CategoryFormDialog', setError))
 
@@ -198,38 +207,3 @@ export function CategoryFormDialog({ open, onOpenChange, mode, onSuccess }: Prop
   )
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof CategoryFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 409) {
-    setError('name', {
-      type: 'server',
-      message: data?.message ?? 'A category with this name already exists',
-    })
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof CategoryFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}

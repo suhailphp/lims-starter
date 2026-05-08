@@ -14,7 +14,22 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import axios from 'axios'
 import { Dialog } from '@/components/ui/Dialog'
 import { FormField, inputClass } from '@/components/ui/FormField'
-import { createInvalidHandler } from '@/utils/formErrors'
+import {
+  createInvalidHandler,
+  handleApiError,
+  useFormSeed,
+} from '@/utils/formErrors'
+
+const KNOWN_FIELDS = [
+  'firstName',
+  'lastName',
+  'email',
+  'password',
+  'role',
+  'customerID',
+  'isActive',
+  'profilePhotoAttachmentID',
+] as const
 import { EnumSelect, type EnumOption } from '@/components/ui/EnumSelect'
 import { FKSelect, type FKOption } from '@/components/ui/FKSelect'
 import { AttachmentUpload } from '@/components/ui/AttachmentUpload'
@@ -126,22 +141,27 @@ export function UserFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
   const showCustomerFK = selectedRole === 'CUSTOMER'
   const photoName = `${watchedFirst ?? ''} ${watchedLast ?? ''}`.trim() || 'New user'
 
-  useEffect(() => {
-    if (!open) return
-    if (isEdit) {
-      reset({
-        ...CREATE_DEFAULTS,
-        ...valuesFromUser(mode.user),
-        // password is unused in edit mode but the field exists in form values type
-        password: '',
-      })
-    } else {
-      reset(CREATE_DEFAULTS)
-    }
-    // Reset photo workflow on every open.
-    setPendingFile(null)
-    setPhotoCleared(false)
-  }, [open, mode, isEdit, reset])
+  useFormSeed({
+    active: open,
+    id: isEdit ? mode.user.userID : null,
+    seed: () => {
+      if (isEdit) {
+        reset({
+          ...CREATE_DEFAULTS,
+          ...valuesFromUser(mode.user),
+          // password is unused in edit mode but the field exists in form values type
+          password: '',
+        })
+      } else {
+        reset(CREATE_DEFAULTS)
+      }
+      // Reset photo workflow only on the same identity transition that
+      // re-seeds the form. A save-failure re-render must NOT discard the
+      // user's already-picked photo file.
+      setPendingFile(null)
+      setPhotoCleared(false)
+    },
+  })
 
   // When role changes away from CUSTOMER, clear the customerID so the cross-field
   // rule passes silently. Otherwise the user has to manually clear it.
@@ -225,7 +245,10 @@ export function UserFormDialog({ open, onOpenChange, mode, onSuccess }: Props) {
       onSuccess?.(saved)
       onOpenChange(false)
     } catch (err) {
-      mapBackendErrors(err, setError)
+      handleApiError(err, setError, 'UserFormDialog', {
+        knownFields: KNOWN_FIELDS,
+        conflictField: 'email',
+      })
     }
   }, createInvalidHandler('UserFormDialog', setError))
 
@@ -436,47 +459,3 @@ function formatPhotoErr(err: unknown): string {
   return 'Unexpected error'
 }
 
-function mapBackendErrors(
-  err: unknown,
-  setError: (
-    field: keyof UserCreateFormValues | 'root',
-    error: { type: string; message: string },
-  ) => void,
-) {
-  if (!axios.isAxiosError(err)) {
-    setError('root', { type: 'server', message: 'Unexpected error. Please try again.' })
-    return
-  }
-  const status = err.response?.status
-  const data = err.response?.data as
-    | { message?: string; errors?: Array<{ path?: (string | number)[]; message?: string }> }
-    | undefined
-
-  if (status === 409) {
-    setError('email', {
-      type: 'server',
-      message: data?.message ?? 'A user with this email already exists',
-    })
-    return
-  }
-  if (status === 404) {
-    const msg = data?.message ?? 'Related record not found'
-    if (/customer/i.test(msg)) {
-      setError('customerID', { type: 'server', message: msg })
-    } else {
-      setError('root', { type: 'server', message: msg })
-    }
-    return
-  }
-  if (status === 422 && Array.isArray(data?.errors)) {
-    for (const detail of data.errors) {
-      const field = (detail.path?.[0] ?? 'root') as keyof UserCreateFormValues | 'root'
-      setError(field, { type: 'server', message: detail.message ?? 'Invalid value' })
-    }
-    return
-  }
-  setError('root', {
-    type: 'server',
-    message: data?.message ?? 'Save failed. Please try again.',
-  })
-}
